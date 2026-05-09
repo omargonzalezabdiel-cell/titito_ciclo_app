@@ -1,0 +1,154 @@
+/* Fuente y Fondo */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0fdf4; 
+    padding: 20px;
+    text-align: center;
+}
+
+h1 { color: #10b981; font-size: 2.2rem; margin-bottom: 5px; }
+.subtitle { color: #666; margin-top: 0; margin-bottom: 30px; font-size: 0.9rem;}
+
+/* GRID Principal */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 15px;
+    max-width: 1100px;
+    margin: 0 auto;
+    text-align: left;
+    align-items: start;
+    grid-auto-flow: dense;
+}
+
+/* TARJETAS */
+.card {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.08);
+}
+
+.card h2 {
+    font-size: 1.1rem;
+    color: #333;
+    margin-top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+/* Tarjeta de Predicción */
+.highlight {
+    background: linear-gradient(135deg, #10b981, #ec4899);
+    color: white;
+    text-align: center;
+}
+.highlight h2 { color: white; border-bottom: 1px solid rgba(255,255,255,0.3); }
+.subtitle-pred { font-size: 0.8rem; opacity: 0.9; margin-bottom: 5px; }
+.big-text { font-size: 2rem; font-weight: bold; margin: 0; }
+
+/* Calendario */
+#calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+#calendar-header button { background: none; color: #333; border: none; font-size: 1.2rem; padding: 0 10px; cursor: pointer; }
+
+#calendar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    text-align: center;
+}
+.day-name { font-weight: bold; color: #10b981; font-size: 0.8rem; }
+.day {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: 0.2s;
+    color: #333;
+}
+.day:hover { background: #dcfce7; }
+.menstruation { background: #ffe4e6; color: #ec4899; font-weight: bold; }
+.active-day { background: #10b981 !important; color: white !important; font-weight: bold; box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4); }
+.predicted { border: 2px dashed #10b981; }
+
+/* Botones */
+.form-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.btn-group { display: flex; gap: 10px; margin-bottom: 15px; }
+.btn-small { flex: 1; padding: 8px; border-radius: 20px; border: 1px solid #10b981; background: white; color: #10b981; cursor: pointer; transition: 0.3s; font-size: 0.9rem;}
+.btn-small.active { background: #10b981; color: white; }
+
+textarea {
+    width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ddd;
+    margin-bottom: 15px; resize: none;
+}
+
+.full-width { width: 100%; padding: 12px; background: #10b981; color: white; border: none; border-radius: 20px; font-weight: bold; cursor: pointer;}
+.full-width:hover { background: #059669; }
+
+/* BOTÓN RESET */
+.reset-btn {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    background: #ec4899;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+}
+.reset-btn:hover {
+    background: #db2777;
+}
+
+.toggle-btn { background: #ddd; color: #666; border: none; padding: 5px 15px; border-radius: 20px; cursor: pointer; font-weight: bold;}
+
+/* Chat */
+#chatBox { height: 160px; overflow-y: auto; background: #fafafa; padding: 10px; border-radius: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px;}
+.msg { padding: 10px 15px; border-radius: 15px; font-size: 0.85rem; max-width: 80%; }
+.ai { background: #dcfce7; }
+.user { background: #ffe4e6; }
+
+.chat-input { display: flex; gap: 10px; }
+.chat-input input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ddd;}
+.chat-input button { background: #10b981; color: white; border: none; width: 40px; height: 40px; border-radius: 50%; }
+
+/* Responsive */
+@media (min-width: 768px) {
+    .calendar-card { grid-row: span 2; }
+}
+
+.phase-card {
+    text-align: center;
+}
+
+.phase-title {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: #10b981;
+}
+
+.phase-desc {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+#alertsList {
+    padding-left: 15px;
+}
+
+#alertsList li {
+    margin-bottom: 5px;
+}
