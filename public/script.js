@@ -416,7 +416,7 @@ function requestNotificationPermission() {
 function sendNotification(title, body) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
     try {
-        new Notification(title, { body, tag: "cycle-alert", icon: "/doctor.png" });
+        new Notification(title, { body, tag: "cycle-alert", icon: "/icon-app.png", badge: "/logo.png" });
     } catch (e) {
         console.warn("Notification error:", e);
     }

@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0f111a">
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="apple-touch-icon" href="/icon-app.png">
+    <link rel="manifest" href="/manifest.json">
     <title>Titito Ciclo — Bienestar inteligente</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +19,7 @@
     <div class="ambient ambient-pink"></div>
     <div class="ambient ambient-green"></div>
     <header class="app-header">
-        <a class="brand" href="/" aria-label="Titito Ciclo inicio"><span class="brand-mark">T</span><span>Titito Ciclo</span></a>
+        <a class="brand" href="/" aria-label="Titito Ciclo inicio"><img class="brand-logo" src="/logo.png" alt="Titito Ciclo"><span>Titito Ciclo</span></a>
         <div class="header-copy"><p class="eyebrow">Tu bienestar inteligente</p><h1>El espacio para escucharte</h1><p class="subtitle">Registra, entiende y acompaña cada fase de tu ciclo.</p></div>
         <button class="notification-bell" type="button" aria-label="Activar notificaciones" onclick="document.getElementById('notifToggle')?.click()"><i class="fa-regular fa-bell"></i></button>
     </header>
@@ -47,9 +50,9 @@
 
         <section class="card history-card"><div class="card-heading"><div><p class="eyebrow">TUS DATOS</p><h2><i class="fa-solid fa-clock-rotate-left"></i> Historial</h2></div><button id="historyToggle" class="history-toggle-btn" aria-label="Mostrar historial"><i class="fa-solid fa-chevron-down"></i></button></div><div id="historyContent" class="history-content collapsed"><p class="history-empty" id="historyEmpty">No hay ciclos registrados aún</p><ul id="historyList"></ul></div></section>
     </main>
-    <footer class="app-footer"><span class="brand-mark small">T</span><strong>Titito Ciclo</strong><span>Tu bienestar, a tu ritmo.</span></footer>
+    <footer class="app-footer"><img class="footer-logo" src="/logo.png" alt="Titito Ciclo"><strong>Titito Ciclo</strong><span>Tu bienestar, a tu ritmo.</span></footer>
     <div id="toast" class="toast"></div>
-    <div id="proactiveToast" class="proactive-toast" role="status" aria-live="polite"><div class="proactive-avatar"><img src="/doctor.png" alt="Dr. Latigo"></div><div><strong>Dr. Latigo</strong><p id="proactiveToastMessage"></p></div><button id="closeProactiveToast" type="button" aria-label="Cerrar aviso">×</button></div>
+    <div id="proactiveToast" class="proactive-toast" role="status" aria-live="polite"><div class="proactive-avatar"><img src="/logo.png" alt="Titito Ciclo"></div><div><strong>Dr. Latigo</strong><p id="proactiveToastMessage"></p></div><button id="closeProactiveToast" type="button" aria-label="Cerrar aviso">×</button></div>
     <script src="script.js"></script>
 </body>
 </html>
