@@ -56,6 +56,8 @@ let cycleData = {};
 let cycleDbPromise = null;
 let recognition = null;
 let isListening = false;
+let stopRequested = false;
+let recognitionRestartTimer = null;
 let isVoiceMuted = false;
 let voiceConversation = [];
 let currentIntensity = 2;
@@ -948,14 +950,75 @@ async function askDoctor(transcript) {
     }
 }
 
-function stopListening() {
-    if (recognition && isListening) recognition.stop();
+function stopListeningUi() {
     isListening = false;
     if (micBtn) {
         micBtn.classList.remove("listening");
         micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i><span>Hablar</span>';
     }
     if (voiceWave) voiceWave.classList.remove("active");
+}
+
+function stopListening() {
+    stopRequested = true;
+    if (recognitionRestartTimer) clearTimeout(recognitionRestartTimer);
+    if (recognition) {
+        try { recognition.stop(); } catch (error) { console.debug("Recognition already stopped", error.message); }
+    }
+    stopListeningUi();
+    if (voiceStatus) voiceStatus.textContent = "Micrófono detenido";
+}
+
+function createRecognitionSession(Recognition) {
+    recognition = new Recognition();
+    recognition.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.onstart = () => {
+        isListening = true;
+        if (voiceStatus) voiceStatus.textContent = "Escuchando...";
+        if (micBtn) {
+            micBtn.classList.add("listening");
+            micBtn.innerHTML = '<i class="fa-solid fa-stop"></i><span>Parar</span>';
+        }
+        if (voiceWave) voiceWave.classList.add("active");
+    };
+    recognition.onresult = (event) => {
+        let finalText = "";
+        let interimText = "";
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            let text = event.results[index][0].transcript;
+            if (event.results[index].isFinal) finalText += text;
+            else interimText += text;
+        }
+        if (interimText && doctorGreeting) doctorGreeting.textContent = `Te escucho: ${interimText}`;
+        if (finalText.trim()) void askDoctor(finalText.trim());
+    };
+    recognition.onerror = (event) => {
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            stopRequested = true;
+            stopListeningUi();
+            if (voiceStatus) voiceStatus.textContent = "Permiso de micrófono denegado";
+            return;
+        }
+        if (voiceStatus) voiceStatus.textContent = "Sigo escuchando...";
+    };
+    recognition.onend = () => {
+        if (stopRequested) {
+            stopListeningUi();
+            return;
+        }
+        recognitionRestartTimer = setTimeout(() => {
+            try { recognition.start(); } catch (error) { console.debug("Recognition restart pending", error.message); }
+        }, 250);
+    };
+    try {
+        recognition.start();
+    } catch (error) {
+        stopListeningUi();
+        if (voiceStatus) voiceStatus.textContent = "No se pudo activar el micrófono";
+        console.warn("Recognition start error:", error.message);
+    }
 }
 
 function startListening() {
@@ -968,28 +1031,8 @@ function startListening() {
         stopListening();
         return;
     }
-    recognition = new Recognition();
-    recognition.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onstart = () => {
-        isListening = true;
-        if (voiceStatus) voiceStatus.textContent = "Escuchando...";
-        if (micBtn) {
-            micBtn.classList.add("listening");
-            micBtn.innerHTML = '<i class="fa-solid fa-stop"></i><span>Parar</span>';
-        }
-        if (voiceWave) voiceWave.classList.add("active");
-    };
-    recognition.onresult = (event) => {
-        let transcript = Array.from(event.results).map(result => result[0].transcript).join(" ");
-        void askDoctor(transcript);
-    };
-    recognition.onerror = (event) => {
-        if (voiceStatus) voiceStatus.textContent = event.error === "not-allowed" ? "Permiso de micrófono denegado" : "No te escuché, inténtalo otra vez";
-    };
-    recognition.onend = stopListening;
-    recognition.start();
+    stopRequested = false;
+    createRecognitionSession(Recognition);
 }
 
 if (micBtn) micBtn.onclick = startListening;
