@@ -48,6 +48,9 @@ const historyContent = document.getElementById("historyContent");
 const historyList = document.getElementById("historyList");
 const historyEmpty = document.getElementById("historyEmpty");
 const toast = document.getElementById("toast");
+const proactiveToast = document.getElementById("proactiveToast");
+const proactiveToastMessage = document.getElementById("proactiveToastMessage");
+const closeProactiveToast = document.getElementById("closeProactiveToast");
 
 // ===== ESTADO =====
 let currentDate = new Date();
@@ -65,6 +68,8 @@ let chartInstance = null;
 let isMenstruation = false;
 let notificationsEnabled = false;
 let moodNotificationTimers = [];
+let proactiveNotificationTimer = null;
+let proactiveToastTimer = null;
 let cycleSettings = JSON.parse(localStorage.getItem("cycleSettings")) || {
     notifications: false,
     advanceDays: NOTIFICATION_THRESHOLD_DAYS
@@ -396,7 +401,8 @@ function requestNotificationPermission() {
             cycleSettings.notifications = true;
             localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
             showToast("Notificaciones activadas");
-            sendNotification("Titito Ciclo", "Te avisaremos antes de tu próximo periodo");
+            sendProactiveReminder();
+            startProactiveNotifications();
         } else {
             notificationsEnabled = false;
             cycleSettings.notifications = false;
@@ -410,11 +416,52 @@ function requestNotificationPermission() {
 function sendNotification(title, body) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
     try {
-        new Notification(title, { body, tag: "cycle-alert" });
+        new Notification(title, { body, tag: "cycle-alert", icon: "/doctor.png" });
     } catch (e) {
         console.warn("Notification error:", e);
     }
 }
+
+const proactiveMessages = [
+    "Hola Yosseling, pásate un tecito caliente y regálate cinco minutos de calma.",
+    "Respira hondo: lo estás haciendo increíble. Tu bienestar también merece espacio.",
+    "Dr. Latigo te recuerda tomar agua y escuchar lo que tu cuerpo necesita hoy.",
+    "Una pausa suave puede cambiar tu momento. Estira los hombros y vuelve a ti.",
+    "No tienes que poder con todo a la vez. Vamos paso a paso, estoy contigo.",
+    "Tu cuerpo está haciendo mucho. Trátalo con paciencia, descanso y cariño.",
+    "Comprueba cómo te sientes: ¿necesitas agua, algo ligero o unos minutos de descanso?",
+    "Yosseling, cuidar de ti no es perder tiempo; es recuperar energía.",
+    "Si tu día pesa, baja el ritmo. Tu salud y tu tranquilidad van primero.",
+    "Recuerda registrar cómo te sientes; cada dato te ayuda a conocerte mejor.",
+    "Un respiro, una bebida tibia y un poco de calma. Aquí sigo acompañándote.",
+    "Tu ciclo no define tu día. Tú decides el ritmo que necesitas ahora."
+];
+
+function showProactiveToast(message) {
+    if (!proactiveToast || !proactiveToastMessage) return;
+    proactiveToastMessage.textContent = message;
+    proactiveToast.classList.add("show");
+    if (proactiveToastTimer) clearTimeout(proactiveToastTimer);
+    proactiveToastTimer = setTimeout(() => proactiveToast.classList.remove("show"), 10000);
+}
+
+function sendProactiveReminder() {
+    if (!notificationsEnabled) return;
+    let previous = localStorage.getItem("lastProactiveMessage") || "";
+    let options = proactiveMessages.filter(message => message !== previous);
+    let message = options[Math.floor(Math.random() * options.length)];
+    localStorage.setItem("lastProactiveMessage", message);
+    showProactiveToast(message);
+    sendNotification("Titito Ciclo · Dr. Latigo", message);
+}
+
+function startProactiveNotifications() {
+    if (proactiveNotificationTimer) clearInterval(proactiveNotificationTimer);
+    if (!notificationsEnabled) return;
+    proactiveNotificationTimer = setInterval(sendProactiveReminder, 30 * 60 * 1000);
+}
+
+if (closeProactiveToast) closeProactiveToast.onclick = () => proactiveToast?.classList.remove("show");
 
 function checkNotificationAlert(data) {
     if (!cycleSettings.notifications || !notificationsEnabled) return;
@@ -452,6 +499,9 @@ if (notifToggle) {
             cycleSettings.notifications = false;
             localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
             clearMoodTimers();
+            if (proactiveNotificationTimer) clearInterval(proactiveNotificationTimer);
+            proactiveNotificationTimer = null;
+            proactiveToast?.classList.remove("show");
             showToast("Notificaciones desactivadas");
         }
     };
@@ -919,8 +969,11 @@ function speakDoctor(text) {
 
 function getLocalDoctorReply(message) {
     let normalizedMessage = message.toLowerCase();
+    if (/(remedio|qué tomar|que tomar|aliviar|calmar|tratamiento)/i.test(normalizedMessage) && /(dolor|cólico|colico|periodo|regla)/i.test(normalizedMessage)) {
+        return "Para molestias leves puedes probar calor local, descanso, hidratación y movimiento suave. No tomes medicamentos nuevos sin confirmar que son seguros para ti; si el dolor es intenso, repentino o no mejora, busca atención médica.";
+    }
     if (/(dolor|cólico|colico|calambre)/i.test(normalizedMessage)) {
-        return "Siento que tengas dolor. Intenta descansar, hidratarte y usar calor suave si te ayuda. Si el dolor es intenso o diferente a lo habitual, busca atención médica.";
+        return "Siento que tengas dolor. Para molestias leves, prueba calor local, hidratación y descanso. Si el dolor es intenso, repentino, diferente a lo habitual o viene con fiebre o desmayo, busca atención médica.";
     }
     if (/(mareo|desmayo|náusea|nausea|vómito|vomito)/i.test(normalizedMessage)) {
         return "Gracias por contármelo. Siéntate o recuéstate, toma agua en pequeños sorbos y evita levantarte rápido. Si te desmayas o empeora, busca ayuda médica.";
@@ -931,7 +984,16 @@ function getLocalDoctorReply(message) {
     if (/(cansad|fatiga|agotad|sueño|sueno)/i.test(normalizedMessage)) {
         return "Tu cuerpo merece una pausa. Toma agua, come algo suave si lo necesitas y busca un momento de descanso sin exigirte de más.";
     }
-    return "Gracias por contármelo. Estoy aquí contigo. Vamos paso a paso y podemos seguir observando cómo te sientes durante tu ciclo.";
+    if (/(ciclo|periodo|regla|ovul|fértil|fertil|retraso)/i.test(normalizedMessage)) {
+        let phase = getCycleContext();
+        return phase.currentPhase === "desconocida"
+            ? "Puedo orientarte mejor si registras el inicio de tu último periodo. Así estimamos tu fase y la próxima fecha, aunque una predicción nunca sustituye una prueba o una consulta médica."
+            : `Según tus registros estás en la fase ${phase.currentPhase}. Tu ciclo es único; usa esta estimación como orientación y registra cualquier cambio importante.`;
+    }
+    if (/(embaraz|prueba|test)/i.test(normalizedMessage)) {
+        return "Si hay posibilidad de embarazo y tienes retraso, una prueba suele ser más fiable desde el primer día de falta. Si presentas dolor fuerte o sangrado abundante, busca atención médica urgente.";
+    }
+    return "Entiendo lo que me cuentas. Para orientarte mejor, dime qué síntoma tienes, desde cuándo empezó y si es diferente a lo habitual. Estoy aquí contigo.";
 }
 
 async function askDoctor(transcript) {
@@ -1119,6 +1181,7 @@ if ("Notification" in window) {
 if (cycleSettings.notifications && "Notification" in window && Notification.permission === "granted") {
     notificationsEnabled = true;
     if (notifToggle) notifToggle.checked = true;
+    startProactiveNotifications();
 }
 
 void hydrateCycleData().then(() => {
