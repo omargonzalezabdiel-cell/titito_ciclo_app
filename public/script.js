@@ -1015,9 +1015,19 @@ function createRecognitionSession(Recognition) {
             stopListeningUi();
             return;
         }
+        if (recognitionRestartTimer) clearTimeout(recognitionRestartTimer);
         recognitionRestartTimer = setTimeout(() => {
-            try { recognition.start(); } catch (error) { console.debug("Recognition restart pending", error.message); }
-        }, 250);
+            if (stopRequested || !recognition) return;
+            try {
+                recognition.start();
+            } catch (error) {
+                recognitionRestartTimer = setTimeout(() => {
+                    if (!stopRequested && recognition) {
+                        try { recognition.start(); } catch (retryError) { console.debug("Recognition restart pending", retryError.message); }
+                    }
+                }, 500);
+            }
+        }, 180);
     };
     try {
         recognition.start();
