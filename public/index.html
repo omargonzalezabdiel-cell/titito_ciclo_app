@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ciclo Inteligente — Yosseling</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <header class="app-header">
+        <h1>🌸 Ciclo de Yosseling</h1>
+        <p class="subtitle">Tu bienestar, registro y asistente personal</p>
+    </header>
+
+    <div class="bento-grid">
+
+        <!-- 🌸 ESTADO INTELIGENTE DEL CICLO -->
+        <div class="card cycle-status-card bento-span-2">
+            <h2><i class="fa-solid fa-heart-pulse"></i> Estado del Ciclo</h2>
+            <div class="cycle-countdown">
+                <p class="countdown-label">Días para tu próximo periodo</p>
+                <p class="countdown-number" id="countdownNumber">—</p>
+                <p class="countdown-date" id="countdownDate">Registra tu ciclo para empezar</p>
+            </div>
+            <button id="quickRegisterBtn" class="quick-register-btn">
+                <i class="fa-solid fa-droplet"></i> Registrar inicio de regla hoy
+            </button>
+            <div class="phase-indicator" id="phaseIndicator">
+                <div class="phase-ring" id="phaseRing"></div>
+                <div class="phase-info">
+                    <p class="phase-title">Sin datos</p>
+                    <p class="phase-desc">Registra tu ciclo</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔔 ALERTAS INTELIGENTES -->
+        <div class="card alerts-card">
+            <h2><i class="fa-solid fa-bell"></i> Alertas</h2>
+            <div class="notif-toggle">
+                <label>
+                    <input type="checkbox" id="notifToggle"> Activar notificaciones
+                </label>
+            </div>
+            <ul id="alertsList"></ul>
+        </div>
+
+        <!-- 📅 CALENDARIO -->
+        <div class="card calendar-card">
+            <h2><i class="fa-solid fa-calendar-days"></i> Calendario</h2>
+            <div id="calendar-header">
+                <button id="prev">&lt;</button>
+                <span id="monthYear">Octubre 2026</span>
+                <button id="next">&gt;</button>
+            </div>
+            <div id="calendar"></div>
+        </div>
+
+        <!-- 🌿 FASE VISUAL -->
+        <div class="card phase-card">
+            <h2>🌿 Fase Actual</h2>
+            <div class="phase-visual" id="phaseVisual">
+                <div class="phase-badge" id="phaseBadge">—</div>
+                <p class="phase-detail" id="phaseDetail">Registra tu ciclo</p>
+                <div class="phase-progress-bar">
+                    <div class="phase-progress-fill" id="phaseProgressFill"></div>
+                </div>
+                <p class="phase-day-info" id="phaseDayInfo"></p>
+            </div>
+        </div>
+
+        <!-- ✍️ REGISTRO DEL DÍA -->
+        <div class="card register-card">
+            <h2><i class="fa-solid fa-pen-to-square"></i> Registro del Día <span id="reg-date-title"></span></h2>
+            <div class="form-group">
+                <p>¿Inició tu periodo hoy?</p>
+                <button class="toggle-btn">No</button>
+            </div>
+            <p class="field-label">Nivel de intensidad:</p>
+            <div class="btn-group">
+                <button class="btn-small">Leve</button>
+                <button class="btn-small active">Media</button>
+                <button class="btn-small">Fuerte</button>
+            </div>
+            <textarea id="notesArea" placeholder="Notas (dolor, humor, fatiga, mareos...)" rows="2"></textarea>
+            <div id="moodFeedback" class="mood-feedback"></div>
+            <button id="saveBtn" class="full-width">Guardar Registro</button>
+            <button class="reset-btn">Resetear Día</button>
+        </div>
+
+        <!-- 📊 RESUMEN + IA -->
+        <div class="card summary-card">
+            <h2>📊 Resumen del ciclo</h2>
+            <div id="cycleSummary"></div>
+            <button id="analyzeBtn" class="full-width">Analizar mi ciclo 🧠</button>
+        </div>
+
+        <!-- 📈 GRÁFICO -->
+        <div class="card chart-card">
+            <h2><i class="fa-solid fa-chart-simple"></i> Intensidad</h2>
+            <div class="chart-container" style="position: relative; height:160px; width:100%">
+                <canvas id="chart"></canvas>
+            </div>
+        </div>
+
+        <!-- 📜 HISTORIAL -->
+        <div class="card history-card">
+            <h2>
+                <i class="fa-solid fa-clock-rotate-left"></i> Historial
+                <button id="historyToggle" class="history-toggle-btn">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </h2>
+            <div id="historyContent" class="history-content collapsed">
+                <p class="history-empty" id="historyEmpty">No hay ciclos registrados aún</p>
+                <ul id="historyList"></ul>
+            </div>
+        </div>
+
+        <!-- 🩺 DR. LATIGO: ASISTENTE MÉDICO POR VOZ -->
+        <div class="card voice-card bento-span-2">
+            <div class="voice-header">
+                <div>
+                    <p class="voice-eyebrow">ASISTENTE MÉDICO POR VOZ</p>
+                    <h2><i class="fa-solid fa-stethoscope"></i> Dr. Latigo</h2>
+                </div>
+                <span class="voice-status" id="voiceStatus">Listo para escucharte</span>
+            </div>
+            <div class="doctor-stage">
+                <div class="doctor-avatar-wrap">
+                    <img src="image.png" class="doctor-avatar-image" alt="Dr. Latigo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';">
+                    <div class="doctor-avatar-fallback" aria-hidden="true">DL</div>
+                    <div class="doctor-online-dot"></div>
+                </div>
+                <div class="voice-wave" id="voiceWave" aria-label="Indicador de voz">
+                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <p class="doctor-greeting" id="doctorGreeting">Hola, soy el Dr. Latigo. Pulsa el micrófono y cuéntame cómo te sientes.</p>
+            </div>
+            <div id="voiceTranscript" class="voice-transcript" aria-live="polite">
+                <div class="voice-bubble doctor-bubble">Estoy aquí para acompañarte con tu ciclo, síntomas y bienestar.</div>
+            </div>
+            <div class="voice-controls">
+                <button id="micBtn" class="mic-btn" type="button" aria-label="Activar micrófono">
+                    <i class="fa-solid fa-microphone"></i><span>Hablar</span>
+                </button>
+                <button id="muteBtn" class="voice-control-btn" type="button">
+                    <i class="fa-solid fa-volume-high"></i><span>Silenciar voz</span>
+                </button>
+                <button id="voiceSettingsBtn" class="voice-control-btn" type="button">
+                    <i class="fa-solid fa-sliders"></i><span>Ajustes</span>
+                </button>
+            </div>
+            <div id="voiceSettings" class="voice-settings" hidden>
+                <label for="voiceRate">Velocidad de voz <output id="voiceRateValue">1.0</output></label>
+                <input id="voiceRate" type="range" min="0.7" max="1.3" value="1" step="0.1">
+                <label for="voiceLanguage">Idioma</label>
+                <select id="voiceLanguage">
+                    <option value="es-ES">Español</option>
+                    <option value="es-MX">Español (México)</option>
+                </select>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

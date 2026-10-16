@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node backend/server.js",
-    "build": "node -c backend/server.js && echo \"Build OK\"",
+    "build": "node build-static.js && node -c backend/server.js && node -c script.js && echo \"Build OK\"", 
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
