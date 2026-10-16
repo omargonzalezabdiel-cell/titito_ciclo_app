@@ -168,13 +168,13 @@ function buildCycleContextString(cycleContext) {
 }
 
 // ===== CHAT IA =====
-app.post("/chat", async (req, res) => {
+app.post(["/chat", "/api/chat"], async (req, res) => {
     try {
         const { message, cycleContext, provider, model, messages: fullMessages } = req.body;
 
         let contextStr = buildCycleContextString(cycleContext);
 
-        const systemContent = `Eres Yosseling, un asistente experto en salud menstrual, ovulación y fases del ciclo. Responde claro, empático, cálido y útil. Usa un tono cercano y amable.\n\nContexto actual del ciclo de la usuaria:\n${contextStr}\n\nUsa este contexto para responder preguntas como "¿Cuándo me toca?" o "¿Cuántos días faltan?" de forma personalizada. Sé breve en tus respuestas (2-4 frases).`;
+        const systemContent = `Eres el Dr. Latigo, un médico especialista en salud femenina y bienestar altamente empático, amable y cercano. Respondes de forma clara, directa y tranquilizadora a dudas sobre el ciclo menstrual, síntomas, nutrición y descanso. No sustituyes una consulta médica y recomiendas atención profesional ante síntomas intensos o preocupantes.\n\nContexto actual del ciclo de la usuaria:\n${contextStr}\n\nSé breve, cálido y personalizado (2-4 frases).`;
 
         let apiMessages = [
             { role: "system", content: systemContent },
@@ -306,8 +306,12 @@ Contexto del ciclo: ${contextStr}`;
     }
 });
 
-// ===== INICIAR SERVIDOR =====
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Servidor corriendo en http://localhost:${PORT}`);
-});
+// Vercel importa la aplicación como función serverless; localmente se inicia con npm start.
+if (require.main === module) {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+        console.log(`Servidor corriendo en http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;

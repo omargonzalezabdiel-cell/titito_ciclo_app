@@ -18,10 +18,18 @@ const saveBtn = document.getElementById("saveBtn");
 const resetBtn = document.querySelector(".reset-btn");
 const moodFeedback = document.getElementById("moodFeedback");
 
-// Chat
-const chatBox = document.getElementById("chatBox");
-const chatInput = document.getElementById("chatInput");
-const sendMsgBtn = document.getElementById("sendMsgBtn");
+// Voz de Dr. Latigo
+const micBtn = document.getElementById("micBtn");
+const muteBtn = document.getElementById("muteBtn");
+const voiceSettingsBtn = document.getElementById("voiceSettingsBtn");
+const voiceSettings = document.getElementById("voiceSettings");
+const voiceRate = document.getElementById("voiceRate");
+const voiceRateValue = document.getElementById("voiceRateValue");
+const voiceLanguage = document.getElementById("voiceLanguage");
+const voiceStatus = document.getElementById("voiceStatus");
+const voiceWave = document.getElementById("voiceWave");
+const voiceTranscript = document.getElementById("voiceTranscript");
+const doctorGreeting = document.getElementById("doctorGreeting");
 
 // Nuevos elementos
 const quickRegisterBtn = document.getElementById("quickRegisterBtn");
@@ -44,6 +52,12 @@ const toast = document.getElementById("toast");
 // ===== ESTADO =====
 let currentDate = new Date();
 let selectedDateKey = null;
+let cycleData = {};
+let cycleDbPromise = null;
+let recognition = null;
+let isListening = false;
+let isVoiceMuted = false;
+let voiceConversation = [];
 let currentIntensity = 2;
 let chartInstance = null;
 let isMenstruation = false;
@@ -54,13 +68,80 @@ let cycleSettings = JSON.parse(localStorage.getItem("cycleSettings")) || {
     advanceDays: NOTIFICATION_THRESHOLD_DAYS
 };
 
-// ===== ALMACENAMIENTO =====
+// ===== ALMACENAMIENTO INDEXEDDB =====
+function openCycleDatabase() {
+    if (cycleDbPromise) return cycleDbPromise;
+    cycleDbPromise = new Promise((resolve, reject) => {
+        if (!("indexedDB" in window)) {
+            reject(new Error("IndexedDB no está disponible"));
+            return;
+        }
+        let request = indexedDB.open("yosseling-cycle-db", 1);
+        request.onupgradeneeded = () => {
+            let database = request.result;
+            if (!database.objectStoreNames.contains("cycle_logs")) {
+                database.createObjectStore("cycle_logs", { keyPath: "id" });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error("No se pudo abrir IndexedDB"));
+    });
+    return cycleDbPromise;
+}
+
 function getData() {
-    return JSON.parse(localStorage.getItem("cicloData")) || {};
+    return cycleData;
+}
+
+async function persistCycleData(data) {
+    cycleData = data;
+    try {
+        let database = await openCycleDatabase();
+        let transaction = database.transaction("cycle_logs", "readwrite");
+        let store = transaction.objectStore("cycle_logs");
+        await new Promise((resolve, reject) => {
+            let clearRequest = store.clear();
+            clearRequest.onsuccess = () => {
+                Object.entries(data).forEach(([date, value]) => {
+                    store.put({ id: date, date, ...value });
+                });
+            };
+            clearRequest.onerror = () => reject(clearRequest.error);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error);
+        });
+    } catch (error) {
+        localStorage.setItem("cicloData", JSON.stringify(data));
+        console.warn("IndexedDB no disponible:", error.message);
+    }
+}
+
+async function hydrateCycleData() {
+    try {
+        let database = await openCycleDatabase();
+        let rows = await new Promise((resolve, reject) => {
+            let request = database.transaction("cycle_logs", "readonly").objectStore("cycle_logs").getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        cycleData = Object.fromEntries(rows.map(row => {
+            let { id, date, ...value } = row;
+            return [date || id, value];
+        }));
+
+        if (Object.keys(cycleData).length === 0) {
+            let legacy = JSON.parse(localStorage.getItem("cicloData") || "{}");
+            if (Object.keys(legacy).length > 0) await persistCycleData(legacy);
+        }
+    } catch (error) {
+        cycleData = JSON.parse(localStorage.getItem("cicloData") || "{}");
+        console.warn("Se usará almacenamiento local de respaldo:", error.message);
+    }
 }
 
 function saveData(data) {
-    localStorage.setItem("cicloData", JSON.stringify(data));
+    cycleData = data;
+    void persistCycleData(data);
 }
 
 // ===== TOAST =====
@@ -650,6 +731,7 @@ if (quickRegisterBtn) {
 // ===== ANÁLISIS DE ESTADO DE ÁNIMO POR IA =====
 async function analyzeMood(notes) {
     if (!notes || !notes.trim()) return;
+    let concernDetected = /(dolor|maread|mareo|malestar|cansad|fatiga|triste|bajonead|ánimo|humor|agotad)/i.test(notes);
 
     try {
         let res = await fetch(`${API_URL}/analyze-mood`, {
@@ -672,12 +754,12 @@ async function analyzeMood(notes) {
             }
 
             // Enviar notificación empática inmediatamente
-            if (notificationsEnabled && result.notification) {
-                sendNotification("🌸 Yosseling está contigo", result.notification);
+            if (notificationsEnabled && result.notification && (result.mood === "negative" || concernDetected)) {
+                sendNotification("🌸 El Dr. Latigo está contigo", result.notification);
             }
 
             // Programar notificaciones de ánimo durante el día
-            if (notificationsEnabled && result.mood === "negative") {
+            if (notificationsEnabled && (result.mood === "negative" || concernDetected)) {
                 scheduleMoodNotifications();
             }
         }
@@ -687,6 +769,10 @@ async function analyzeMood(notes) {
         if (moodFeedback) {
             moodFeedback.innerHTML = `<div class="mood-msg negative">💛 Un abrazo fuerte. Descansa y sé amable contigo hoy.</div>`;
             moodFeedback.classList.add("show");
+        }
+        if (notificationsEnabled && concernDetected) {
+            sendNotification("🌸 El Dr. Latigo está contigo", "Tómate un té caliente, descansa y recuerda que no estás sola.");
+            scheduleMoodNotifications();
         }
     }
 }
@@ -800,45 +886,126 @@ if (analyzeBtn) {
     analyzeBtn.onclick = analyzeCycle;
 }
 
-// ===== CHAT — usa rutas relativas al mismo servidor =====
-async function sendMessage() {
-    let msg = chatInput.value.trim();
-    if (!msg) return;
+// ===== DR. LATIGO: ASISTENTE POR VOZ =====
+function addVoiceBubble(text, role) {
+    if (!voiceTranscript) return;
+    let bubble = document.createElement("div");
+    bubble.className = `voice-bubble ${role === "user" ? "user-bubble" : "doctor-bubble"}`;
+    bubble.textContent = text;
+    voiceTranscript.appendChild(bubble);
+    voiceTranscript.scrollTop = voiceTranscript.scrollHeight;
+}
 
-    chatBox.innerHTML += `<div class="msg user">${escapeHtml(msg)}</div>`;
-    chatInput.value = "";
-    chatBox.scrollTop = chatBox.scrollHeight;
+function speakDoctor(text) {
+    if (isVoiceMuted || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    let utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
+    utterance.rate = voiceRate ? Number(voiceRate.value) : 1;
+    utterance.pitch = 1.02;
+    utterance.onstart = () => voiceWave && voiceWave.classList.add("active");
+    utterance.onend = () => voiceWave && voiceWave.classList.remove("active");
+    window.speechSynthesis.speak(utterance);
+}
 
-    // Indicador de "escribiendo..."
-    let typingDiv = document.createElement("div");
-    typingDiv.className = "msg ai";
-    typingDiv.textContent = "Escribiendo...";
-    chatBox.appendChild(typingDiv);
-    chatBox.scrollTop = chatBox.scrollHeight;
+async function askDoctor(transcript) {
+    let message = transcript.trim();
+    if (!message) return;
+    addVoiceBubble(message, "user");
+    voiceConversation.push({ role: "user", content: message });
+    if (voiceStatus) voiceStatus.textContent = "Dr. Latigo está pensando...";
+    if (doctorGreeting) doctorGreeting.textContent = "Estoy revisando lo que me cuentas...";
 
     try {
-        let res = await fetch(`${API_URL}/chat`, {
+        let response = await fetch(`${API_URL}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                message: msg,
+                messages: voiceConversation,
+                message,
+                model: "llama-3.1-8b-instant",
+                provider: "groq",
+                settings: { voice: true, language: voiceLanguage ? voiceLanguage.value : "es-ES" },
                 cycleContext: getCycleContext()
             })
         });
-
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        let data = await res.json();
-
-        typingDiv.remove();
-        chatBox.innerHTML += `<div class="msg ai">${escapeHtml(data.reply)}</div>`;
-        chatBox.scrollTop = chatBox.scrollHeight;
-    } catch (err) {
-        typingDiv.remove();
-        chatBox.innerHTML += `<div class="msg ai">No pude conectar con el servidor. Verifica que el backend esté corriendo.</div>`;
-        chatBox.scrollTop = chatBox.scrollHeight;
-        console.warn("Chat error:", err.message);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        let result = await response.json();
+        let reply = typeof result.reply === "string" && result.reply.trim()
+            ? result.reply.trim()
+            : "Estoy aquí contigo. Cuéntame un poco más.";
+        voiceConversation.push({ role: "assistant", content: reply });
+        addVoiceBubble(reply, "assistant");
+        speakDoctor(reply);
+        if (voiceStatus) voiceStatus.textContent = `Conectado · ${result.provider || "asistente"}`;
+        if (doctorGreeting) doctorGreeting.textContent = "Puedes volver a hablar cuando quieras.";
+    } catch (error) {
+        let fallback = "No pude conectar ahora mismo, pero sigo aquí contigo. Inténtalo de nuevo en un momento.";
+        addVoiceBubble(fallback, "assistant");
+        speakDoctor(fallback);
+        if (voiceStatus) voiceStatus.textContent = "Revisa la conexión";
+        console.warn("Voice assistant error:", error.message);
     }
 }
+
+function stopListening() {
+    if (recognition && isListening) recognition.stop();
+    isListening = false;
+    if (micBtn) {
+        micBtn.classList.remove("listening");
+        micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i><span>Hablar</span>';
+    }
+    if (voiceWave) voiceWave.classList.remove("active");
+}
+
+function startListening() {
+    let Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+        showToast("Tu navegador no admite reconocimiento de voz");
+        return;
+    }
+    if (isListening) {
+        stopListening();
+        return;
+    }
+    recognition = new Recognition();
+    recognition.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onstart = () => {
+        isListening = true;
+        if (voiceStatus) voiceStatus.textContent = "Escuchando...";
+        if (micBtn) {
+            micBtn.classList.add("listening");
+            micBtn.innerHTML = '<i class="fa-solid fa-stop"></i><span>Parar</span>';
+        }
+        if (voiceWave) voiceWave.classList.add("active");
+    };
+    recognition.onresult = (event) => {
+        let transcript = Array.from(event.results).map(result => result[0].transcript).join(" ");
+        void askDoctor(transcript);
+    };
+    recognition.onerror = (event) => {
+        if (voiceStatus) voiceStatus.textContent = event.error === "not-allowed" ? "Permiso de micrófono denegado" : "No te escuché, inténtalo otra vez";
+    };
+    recognition.onend = stopListening;
+    recognition.start();
+}
+
+if (micBtn) micBtn.onclick = startListening;
+if (muteBtn) muteBtn.onclick = () => {
+    isVoiceMuted = !isVoiceMuted;
+    if (isVoiceMuted && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    muteBtn.innerHTML = isVoiceMuted
+        ? '<i class="fa-solid fa-volume-xmark"></i><span>Activar voz</span>'
+        : '<i class="fa-solid fa-volume-high"></i><span>Silenciar voz</span>';
+};
+if (voiceSettingsBtn && voiceSettings) voiceSettingsBtn.onclick = () => {
+    voiceSettings.hidden = !voiceSettings.hidden;
+};
+if (voiceRate) voiceRate.oninput = () => {
+    if (voiceRateValue) voiceRateValue.value = Number(voiceRate.value).toFixed(1);
+};
 
 // ===== NAVEGACIÓN CALENDARIO =====
 const prevBtn = document.getElementById("prev");
@@ -857,13 +1024,6 @@ if (nextBtn) {
     };
 }
 
-// ===== ENTER PARA ENVIAR CHAT =====
-if (chatInput) {
-    chatInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") sendMessage();
-    });
-}
-
 // ===== RENDERIZAR TODO =====
 function renderAll() {
     renderCalendar();
@@ -872,13 +1032,12 @@ function renderAll() {
 }
 
 // ===== INIT =====
-if (sendMsgBtn) sendMsgBtn.onclick = sendMessage;
-
-// Inicializar notificaciones si ya estaban activadas
 if (cycleSettings.notifications && "Notification" in window && Notification.permission === "granted") {
     notificationsEnabled = true;
     if (notifToggle) notifToggle.checked = true;
 }
 
-renderAll();
-checkNotificationAlert(getData());
+void hydrateCycleData().then(() => {
+    renderAll();
+    checkNotificationAlert(getData());
+});
