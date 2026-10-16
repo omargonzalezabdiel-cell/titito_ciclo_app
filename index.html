@@ -25,9 +25,8 @@
         <section class="card voice-card bento-span-2">
             <div class="voice-header"><div><p class="voice-eyebrow">ASISTENTE MÉDICO POR VOZ</p><h2><i class="fa-solid fa-stethoscope"></i> Dr. Latigo</h2></div><span class="voice-status" id="voiceStatus">Listo para escucharte</span></div>
             <div class="doctor-stage">
-                <div class="doctor-avatar-wrap"><img src="/doctor.png" class="doctor-avatar-image" alt="Dr. Latigo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';"><div class="doctor-avatar-fallback" aria-hidden="true">DL</div><div class="doctor-online-dot"></div></div>
-                <div class="voice-wave" id="voiceWave" aria-label="Indicador de voz"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-                <p class="doctor-greeting" id="doctorGreeting">Hola, soy el Dr. Latigo. Pulsa el micrófono y cuéntame cómo te sientes.</p>
+                <div class="doctor-cutout-wrap"><img src="/doctor.png" class="doctor-cutout" alt="Dr. Latigo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';"><div class="doctor-cutout-fallback" aria-hidden="true">Dr. Latigo</div><div class="doctor-online-dot"></div></div>
+                <div class="doctor-voice-intro"><div class="voice-wave" id="voiceWave" aria-label="Indicador de voz"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><p class="doctor-greeting" id="doctorGreeting">Hola, soy el Dr. Latigo. Pulsa el micrófono y cuéntame cómo te sientes.</p></div>
             </div>
             <div id="voiceTranscript" class="voice-transcript" aria-live="polite"><div class="voice-bubble doctor-bubble">Estoy aquí para acompañarte con tu ciclo, síntomas y bienestar.</div></div>
             <div class="voice-controls"><button id="micBtn" class="mic-btn" type="button" aria-label="Activar micrófono"><i class="fa-solid fa-microphone"></i><span>Hablar</span></button><button id="muteBtn" class="voice-control-btn" type="button"><i class="fa-solid fa-volume-high"></i><span>Silenciar voz</span></button><button id="voiceSettingsBtn" class="voice-control-btn" type="button"><i class="fa-solid fa-sliders"></i><span>Ajustes</span></button></div>

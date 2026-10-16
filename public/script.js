@@ -917,6 +917,23 @@ function speakDoctor(text) {
     window.speechSynthesis.speak(utterance);
 }
 
+function getLocalDoctorReply(message) {
+    let normalizedMessage = message.toLowerCase();
+    if (/(dolor|cólico|colico|calambre)/i.test(normalizedMessage)) {
+        return "Siento que tengas dolor. Intenta descansar, hidratarte y usar calor suave si te ayuda. Si el dolor es intenso o diferente a lo habitual, busca atención médica.";
+    }
+    if (/(mareo|desmayo|náusea|nausea|vómito|vomito)/i.test(normalizedMessage)) {
+        return "Gracias por contármelo. Siéntate o recuéstate, toma agua en pequeños sorbos y evita levantarte rápido. Si te desmayas o empeora, busca ayuda médica.";
+    }
+    if (/(triste|ansiedad|ansiosa|preocup|llorar|ánimo|animo)/i.test(normalizedMessage)) {
+        return "Te escucho, Yosseling. No tienes que resolverlo todo ahora. Respira despacio, date un momento y recuerda que pedir apoyo también es cuidarte.";
+    }
+    if (/(cansad|fatiga|agotad|sueño|sueno)/i.test(normalizedMessage)) {
+        return "Tu cuerpo merece una pausa. Toma agua, come algo suave si lo necesitas y busca un momento de descanso sin exigirte de más.";
+    }
+    return "Gracias por contármelo. Estoy aquí contigo. Vamos paso a paso y podemos seguir observando cómo te sientes durante tu ciclo.";
+}
+
 async function askDoctor(transcript) {
     let message = transcript.trim();
     if (!message) return;
@@ -925,36 +942,39 @@ async function askDoctor(transcript) {
     if (voiceStatus) voiceStatus.textContent = "Dr. Latigo está pensando...";
     if (doctorGreeting) doctorGreeting.textContent = "Estoy revisando lo que me cuentas...";
 
-    try {
-        let response = await fetch(`${API_URL}/api/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                messages: voiceConversation,
-                message,
-                model: "llama-3.1-8b-instant",
-                provider: "groq",
-                settings: { voice: true, language: voiceLanguage ? voiceLanguage.value : "es-ES" },
-                cycleContext: getCycleContext()
-            })
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        let result = await response.json();
-        let reply = typeof result.reply === "string" && result.reply.trim()
-            ? result.reply.trim()
-            : "Estoy aquí contigo. Cuéntame un poco más.";
-        voiceConversation.push({ role: "assistant", content: reply });
-        addVoiceBubble(reply, "assistant");
-        speakDoctor(reply);
-        if (voiceStatus) voiceStatus.textContent = `Conectado · ${result.provider || "asistente"}`;
-        if (doctorGreeting) doctorGreeting.textContent = "Puedes volver a hablar cuando quieras.";
-    } catch (error) {
-        let fallback = "No pude conectar ahora mismo, pero sigo aquí contigo. Inténtalo de nuevo en un momento.";
-        addVoiceBubble(fallback, "assistant");
-        speakDoctor(fallback);
-        if (voiceStatus) voiceStatus.textContent = "Revisa la conexión";
-        console.warn("Voice assistant error:", error.message);
+    let reply = getLocalDoctorReply(message);
+    let provider = "respuesta local";
+    if (API_URL) {
+        try {
+            let response = await fetch(`${API_URL}/api/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messages: voiceConversation,
+                    message,
+                    model: "llama-3.1-8b-instant",
+                    provider: "groq",
+                    settings: { voice: true, language: voiceLanguage ? voiceLanguage.value : "es-ES" },
+                    cycleContext: getCycleContext()
+                })
+            });
+            if (response.ok) {
+                let result = await response.json();
+                if (typeof result.reply === "string" && result.reply.trim()) {
+                    reply = result.reply.trim();
+                    provider = result.provider || "asistente";
+                }
+            }
+        } catch (error) {
+            console.warn("Voice assistant API unavailable; using local response.", error.message);
+        }
     }
+
+    voiceConversation.push({ role: "assistant", content: reply });
+    addVoiceBubble(reply, "assistant");
+    speakDoctor(reply);
+    if (voiceStatus) voiceStatus.textContent = `Listo · ${provider}`;
+    if (doctorGreeting) doctorGreeting.textContent = "Puedes volver a hablar cuando quieras.";
 }
 
 function stopListeningUi() {
