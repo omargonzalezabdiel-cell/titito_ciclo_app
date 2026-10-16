@@ -396,7 +396,7 @@ function requestNotificationPermission() {
             cycleSettings.notifications = true;
             localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
             showToast("Notificaciones activadas");
-            sendNotification("Ciclo Inteligente", "Te avisaremos antes de tu próximo periodo");
+            sendNotification("Titito Ciclo", "Te avisaremos antes de tu próximo periodo");
         } else {
             notificationsEnabled = false;
             cycleSettings.notifications = false;
@@ -697,6 +697,7 @@ if (saveBtn) {
 
         // Analizar mood si hay notas
         if (notes) {
+            notifyEmpathyForNotes(notes);
             await analyzeMood(notes);
         }
     };
@@ -731,6 +732,12 @@ if (quickRegisterBtn) {
 }
 
 // ===== ANÁLISIS DE ESTADO DE ÁNIMO POR IA =====
+function notifyEmpathyForNotes(notes) {
+    let concernDetected = /(dolor|maread|mareo|malestar|cansad|fatiga|triste|bajonead|ánimo|humor|agotad)/i.test(notes);
+    if (!concernDetected || !notificationsEnabled) return;
+    sendNotification("Titito Ciclo · Dr. Latigo", "Mucho ánimo, Yosseling. Tómate un té caliente y descansa.");
+}
+
 async function analyzeMood(notes) {
     if (!notes || !notes.trim()) return;
     let concernDetected = /(dolor|maread|mareo|malestar|cansad|fatiga|triste|bajonead|ánimo|humor|agotad)/i.test(notes);
@@ -1075,6 +1082,10 @@ function renderAll() {
 }
 
 // ===== INIT =====
+if ("Notification" in window) {
+    requestNotificationPermission();
+}
+
 if (cycleSettings.notifications && "Notification" in window && Notification.permission === "granted") {
     notificationsEnabled = true;
     if (notifToggle) notifToggle.checked = true;

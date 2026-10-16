@@ -3,173 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ciclo Inteligente — Yosseling</title>
+    <meta name="theme-color" content="#0f111a">
+    <title>Titito Ciclo — Bienestar inteligente</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-
+    <div class="ambient ambient-pink"></div>
+    <div class="ambient ambient-green"></div>
     <header class="app-header">
-        <h1>🌸 Ciclo de Yosseling</h1>
-        <p class="subtitle">Tu bienestar, registro y asistente personal</p>
+        <a class="brand" href="/" aria-label="Titito Ciclo inicio"><span class="brand-mark">T</span><span>Titito Ciclo</span></a>
+        <div class="header-copy"><p class="eyebrow">Tu bienestar inteligente</p><h1>El espacio para escucharte</h1><p class="subtitle">Registra, entiende y acompaña cada fase de tu ciclo.</p></div>
+        <button class="notification-bell" type="button" aria-label="Activar notificaciones" onclick="document.getElementById('notifToggle')?.click()"><i class="fa-regular fa-bell"></i></button>
     </header>
 
-    <div class="bento-grid">
-
-        <!-- 🌸 ESTADO INTELIGENTE DEL CICLO -->
-        <div class="card cycle-status-card bento-span-2">
-            <h2><i class="fa-solid fa-heart-pulse"></i> Estado del Ciclo</h2>
-            <div class="cycle-countdown">
-                <p class="countdown-label">Días para tu próximo periodo</p>
-                <p class="countdown-number" id="countdownNumber">—</p>
-                <p class="countdown-date" id="countdownDate">Registra tu ciclo para empezar</p>
-            </div>
-            <button id="quickRegisterBtn" class="quick-register-btn">
-                <i class="fa-solid fa-droplet"></i> Registrar inicio de regla hoy
-            </button>
-            <div class="phase-indicator" id="phaseIndicator">
-                <div class="phase-ring" id="phaseRing"></div>
-                <div class="phase-info">
-                    <p class="phase-title">Sin datos</p>
-                    <p class="phase-desc">Registra tu ciclo</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- 🔔 ALERTAS INTELIGENTES -->
-        <div class="card alerts-card">
-            <h2><i class="fa-solid fa-bell"></i> Alertas</h2>
-            <div class="notif-toggle">
-                <label>
-                    <input type="checkbox" id="notifToggle"> Activar notificaciones
-                </label>
-            </div>
-            <ul id="alertsList"></ul>
-        </div>
-
-        <!-- 📅 CALENDARIO -->
-        <div class="card calendar-card">
-            <h2><i class="fa-solid fa-calendar-days"></i> Calendario</h2>
-            <div id="calendar-header">
-                <button id="prev">&lt;</button>
-                <span id="monthYear">Octubre 2026</span>
-                <button id="next">&gt;</button>
-            </div>
-            <div id="calendar"></div>
-        </div>
-
-        <!-- 🌿 FASE VISUAL -->
-        <div class="card phase-card">
-            <h2>🌿 Fase Actual</h2>
-            <div class="phase-visual" id="phaseVisual">
-                <div class="phase-badge" id="phaseBadge">—</div>
-                <p class="phase-detail" id="phaseDetail">Registra tu ciclo</p>
-                <div class="phase-progress-bar">
-                    <div class="phase-progress-fill" id="phaseProgressFill"></div>
-                </div>
-                <p class="phase-day-info" id="phaseDayInfo"></p>
-            </div>
-        </div>
-
-        <!-- ✍️ REGISTRO DEL DÍA -->
-        <div class="card register-card">
-            <h2><i class="fa-solid fa-pen-to-square"></i> Registro del Día <span id="reg-date-title"></span></h2>
-            <div class="form-group">
-                <p>¿Inició tu periodo hoy?</p>
-                <button class="toggle-btn">No</button>
-            </div>
-            <p class="field-label">Nivel de intensidad:</p>
-            <div class="btn-group">
-                <button class="btn-small">Leve</button>
-                <button class="btn-small active">Media</button>
-                <button class="btn-small">Fuerte</button>
-            </div>
-            <textarea id="notesArea" placeholder="Notas (dolor, humor, fatiga, mareos...)" rows="2"></textarea>
-            <div id="moodFeedback" class="mood-feedback"></div>
-            <button id="saveBtn" class="full-width">Guardar Registro</button>
-            <button class="reset-btn">Resetear Día</button>
-        </div>
-
-        <!-- 📊 RESUMEN + IA -->
-        <div class="card summary-card">
-            <h2>📊 Resumen del ciclo</h2>
-            <div id="cycleSummary"></div>
-            <button id="analyzeBtn" class="full-width">Analizar mi ciclo 🧠</button>
-        </div>
-
-        <!-- 📈 GRÁFICO -->
-        <div class="card chart-card">
-            <h2><i class="fa-solid fa-chart-simple"></i> Intensidad</h2>
-            <div class="chart-container" style="position: relative; height:160px; width:100%">
-                <canvas id="chart"></canvas>
-            </div>
-        </div>
-
-        <!-- 📜 HISTORIAL -->
-        <div class="card history-card">
-            <h2>
-                <i class="fa-solid fa-clock-rotate-left"></i> Historial
-                <button id="historyToggle" class="history-toggle-btn">
-                    <i class="fa-solid fa-chevron-down"></i>
-                </button>
-            </h2>
-            <div id="historyContent" class="history-content collapsed">
-                <p class="history-empty" id="historyEmpty">No hay ciclos registrados aún</p>
-                <ul id="historyList"></ul>
-            </div>
-        </div>
-
-        <!-- 🩺 DR. LATIGO: ASISTENTE MÉDICO POR VOZ -->
-        <div class="card voice-card bento-span-2">
-            <div class="voice-header">
-                <div>
-                    <p class="voice-eyebrow">ASISTENTE MÉDICO POR VOZ</p>
-                    <h2><i class="fa-solid fa-stethoscope"></i> Dr. Latigo</h2>
-                </div>
-                <span class="voice-status" id="voiceStatus">Listo para escucharte</span>
-            </div>
+    <main class="bento-grid">
+        <section class="card voice-card bento-span-2">
+            <div class="voice-header"><div><p class="voice-eyebrow">ASISTENTE MÉDICO POR VOZ</p><h2><i class="fa-solid fa-stethoscope"></i> Dr. Latigo</h2></div><span class="voice-status" id="voiceStatus">Listo para escucharte</span></div>
             <div class="doctor-stage">
-                <div class="doctor-avatar-wrap">
-                    <img src="image.png" class="doctor-avatar-image" alt="Dr. Latigo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';">
-                    <div class="doctor-avatar-fallback" aria-hidden="true">DL</div>
-                    <div class="doctor-online-dot"></div>
-                </div>
-                <div class="voice-wave" id="voiceWave" aria-label="Indicador de voz">
-                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-                </div>
+                <div class="doctor-avatar-wrap"><img src="assets/images/image.png" class="doctor-avatar-image" alt="Dr. Latigo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';"><div class="doctor-avatar-fallback" aria-hidden="true">DL</div><div class="doctor-online-dot"></div></div>
+                <div class="voice-wave" id="voiceWave" aria-label="Indicador de voz"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
                 <p class="doctor-greeting" id="doctorGreeting">Hola, soy el Dr. Latigo. Pulsa el micrófono y cuéntame cómo te sientes.</p>
             </div>
-            <div id="voiceTranscript" class="voice-transcript" aria-live="polite">
-                <div class="voice-bubble doctor-bubble">Estoy aquí para acompañarte con tu ciclo, síntomas y bienestar.</div>
-            </div>
-            <div class="voice-controls">
-                <button id="micBtn" class="mic-btn" type="button" aria-label="Activar micrófono">
-                    <i class="fa-solid fa-microphone"></i><span>Hablar</span>
-                </button>
-                <button id="muteBtn" class="voice-control-btn" type="button">
-                    <i class="fa-solid fa-volume-high"></i><span>Silenciar voz</span>
-                </button>
-                <button id="voiceSettingsBtn" class="voice-control-btn" type="button">
-                    <i class="fa-solid fa-sliders"></i><span>Ajustes</span>
-                </button>
-            </div>
-            <div id="voiceSettings" class="voice-settings" hidden>
-                <label for="voiceRate">Velocidad de voz <output id="voiceRateValue">1.0</output></label>
-                <input id="voiceRate" type="range" min="0.7" max="1.3" value="1" step="0.1">
-                <label for="voiceLanguage">Idioma</label>
-                <select id="voiceLanguage">
-                    <option value="es-ES">Español</option>
-                    <option value="es-MX">Español (México)</option>
-                </select>
-            </div>
-        </div>
+            <div id="voiceTranscript" class="voice-transcript" aria-live="polite"><div class="voice-bubble doctor-bubble">Estoy aquí para acompañarte con tu ciclo, síntomas y bienestar.</div></div>
+            <div class="voice-controls"><button id="micBtn" class="mic-btn" type="button" aria-label="Activar micrófono"><i class="fa-solid fa-microphone"></i><span>Hablar</span></button><button id="muteBtn" class="voice-control-btn" type="button"><i class="fa-solid fa-volume-high"></i><span>Silenciar voz</span></button><button id="voiceSettingsBtn" class="voice-control-btn" type="button"><i class="fa-solid fa-sliders"></i><span>Ajustes</span></button></div>
+            <div id="voiceSettings" class="voice-settings" hidden><label for="voiceRate">Velocidad de voz <output id="voiceRateValue">1.0</output></label><input id="voiceRate" type="range" min="0.7" max="1.3" value="1" step="0.1"><label for="voiceLanguage">Idioma</label><select id="voiceLanguage"><option value="es-ES">Español</option><option value="es-MX">Español (México)</option></select></div>
+        </section>
 
-    </div>
+        <section class="card cycle-status-card"><div class="card-heading"><div><p class="eyebrow">PANEL DE CICLO</p><h2><i class="fa-solid fa-heart-pulse"></i> Resumen del ciclo</h2></div><span class="status-dot"></span></div><div class="cycle-countdown"><p class="countdown-label">Días para tu próximo periodo</p><p class="countdown-number" id="countdownNumber">—</p><p class="countdown-date" id="countdownDate">Registra tu ciclo para empezar</p></div><button id="quickRegisterBtn" class="quick-register-btn"><i class="fa-solid fa-droplet"></i> Registrar inicio hoy</button><div class="phase-indicator" id="phaseIndicator"><div class="phase-ring" id="phaseRing"></div><div class="phase-info"><p class="phase-title">Sin datos</p><p class="phase-desc">Registra tu ciclo</p></div></div></section>
 
-    <!-- TOAST -->
+        <section class="card register-card"><div class="card-heading"><div><p class="eyebrow">CHECK-IN DIARIO</p><h2><i class="fa-solid fa-pen-to-square"></i> Registro del día <span id="reg-date-title"></span></h2></div><i class="fa-regular fa-face-smile card-icon"></i></div><div class="form-group"><p>¿Inició tu periodo hoy?</p><button class="toggle-btn">No</button></div><p class="field-label">Nivel de intensidad</p><div class="btn-group"><button class="btn-small">Leve</button><button class="btn-small active">Media</button><button class="btn-small">Fuerte</button></div><textarea id="notesArea" placeholder="¿Cómo te sientes? dolor, humor, fatiga, mareos..." rows="3"></textarea><div id="moodFeedback" class="mood-feedback"></div><button id="saveBtn" class="full-width">Guardar registro</button><button class="reset-btn">Resetear día</button></section>
+
+        <section class="card calendar-card"><div class="card-heading"><div><p class="eyebrow">VISTA MENSUAL</p><h2><i class="fa-solid fa-calendar-days"></i> Calendario</h2></div><i class="fa-regular fa-calendar card-icon"></i></div><div id="calendar-header"><button id="prev" aria-label="Mes anterior"><i class="fa-solid fa-chevron-left"></i></button><span id="monthYear">Octubre 2026</span><button id="next" aria-label="Mes siguiente"><i class="fa-solid fa-chevron-right"></i></button></div><div id="calendar"></div></section>
+
+        <section class="card alerts-card"><div class="card-heading"><div><p class="eyebrow">CUIDADO PERSONAL</p><h2><i class="fa-solid fa-bell"></i> Alertas</h2></div><label class="switch"><input type="checkbox" id="notifToggle"><span></span></label></div><p class="card-note">Recibe recordatorios suaves y mensajes del Dr. Latigo.</p><ul id="alertsList"></ul></section>
+
+        <section class="card phase-card"><div class="card-heading"><div><p class="eyebrow">TU RITMO</p><h2><i class="fa-solid fa-leaf"></i> Fase actual</h2></div><span class="phase-chip">Hoy</span></div><div class="phase-visual" id="phaseVisual"><div class="phase-badge" id="phaseBadge">—</div><p class="phase-detail" id="phaseDetail">Registra tu ciclo</p><div class="phase-progress-bar"><div class="phase-progress-fill" id="phaseProgressFill"></div></div><p class="phase-day-info" id="phaseDayInfo"></p></div></section>
+
+        <section class="card summary-card"><div class="card-heading"><div><p class="eyebrow">PERSPECTIVA</p><h2><i class="fa-solid fa-wand-magic-sparkles"></i> Análisis de Ánimo por el Dr. Latigo</h2></div></div><div id="cycleSummary"></div><button id="analyzeBtn" class="full-width secondary-action">Analizar mi ciclo <i class="fa-solid fa-arrow-right"></i></button></section>
+
+        <section class="card history-card"><div class="card-heading"><div><p class="eyebrow">TUS DATOS</p><h2><i class="fa-solid fa-clock-rotate-left"></i> Historial</h2></div><button id="historyToggle" class="history-toggle-btn" aria-label="Mostrar historial"><i class="fa-solid fa-chevron-down"></i></button></div><div id="historyContent" class="history-content collapsed"><p class="history-empty" id="historyEmpty">No hay ciclos registrados aún</p><ul id="historyList"></ul></div></section>
+    </main>
+    <footer class="app-footer"><span class="brand-mark small">T</span><strong>Titito Ciclo</strong><span>Tu bienestar, a tu ritmo.</span></footer>
     <div id="toast" class="toast"></div>
-
     <script src="script.js"></script>
 </body>
 </html>
