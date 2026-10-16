@@ -3,41 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ciclo Inteligente</title>
+    <title>Ciclo Inteligente — Yosseling</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-    <header>
-        <h1>🌸 Ciclo De Yosseling</h1>
+    <header class="app-header">
+        <h1>🌸 Ciclo de Yosseling</h1>
         <p class="subtitle">Tu bienestar, registro y asistente personal</p>
     </header>
 
-    <div class="grid">
-
-        <div class="card calendar-card">
-            <h2><i class="fa-solid fa-calendar-days"></i> Calendario</h2>
-            <div id="calendar-header">
-                <button id="prev">&lt;</button>
-                <span id="monthYear">Abril 2026</span>
-                <button id="next">&gt;</button>
-            </div>
-            <div id="calendar">
-            </div>
-        </div>
+    <div class="bento-grid">
 
         <!-- 🌸 ESTADO INTELIGENTE DEL CICLO -->
-        <div class="card cycle-status-card">
-            <h2><i class="fa-solid fa-heart-pulse"></i> Estado del Ciclo Inteligente</h2>
+        <div class="card cycle-status-card bento-span-2">
+            <h2><i class="fa-solid fa-heart-pulse"></i> Estado del Ciclo</h2>
             <div class="cycle-countdown">
                 <p class="countdown-label">Días para tu próximo periodo</p>
                 <p class="countdown-number" id="countdownNumber">—</p>
                 <p class="countdown-date" id="countdownDate">Registra tu ciclo para empezar</p>
             </div>
             <button id="quickRegisterBtn" class="quick-register-btn">
-                <i class="fa-solid fa-drop"></i> Registrar inicio de regla hoy
+                <i class="fa-solid fa-droplet"></i> Registrar inicio de regla hoy
             </button>
             <div class="phase-indicator" id="phaseIndicator">
                 <div class="phase-ring" id="phaseRing"></div>
@@ -48,31 +37,9 @@
             </div>
         </div>
 
-        <div class="card highlight">
-            <h2><i class="fa-solid fa-bell"></i> Predicciones y Avisos</h2>
-            <div class="prediction-content">
-                <p class="subtitle-pred">Predicción Automática</p>
-                <p class="big-text">Faltan 4 días</p>
-                <p>Próximo ciclo estimado: <b>1 de Mayo</b> 🔮</p>
-            </div>
-        </div>
-
-        <!-- 🌿 FASE VISUAL -->
-        <div class="card phase-card">
-            <h2>🌿 Fase Actual</h2>
-            <div class="phase-visual" id="phaseVisual">
-                <div class="phase-badge" id="phaseBadge">—</div>
-                <p class="phase-detail" id="phaseDetail">Registra tu ciclo para ver tu fase</p>
-                <div class="phase-progress-bar">
-                    <div class="phase-progress-fill" id="phaseProgressFill"></div>
-                </div>
-                <p class="phase-day-info" id="phaseDayInfo"></p>
-            </div>
-        </div>
-
-        <!-- 🔔 ALERTAS -->
-        <div class="card">
-            <h2>🔔 Alertas Inteligentes</h2>
+        <!-- 🔔 ALERTAS INTELIGENTES -->
+        <div class="card alerts-card">
+            <h2><i class="fa-solid fa-bell"></i> Alertas</h2>
             <div class="notif-toggle">
                 <label>
                     <input type="checkbox" id="notifToggle"> Activar notificaciones
@@ -81,44 +48,68 @@
             <ul id="alertsList"></ul>
         </div>
 
-        <!-- 📊 RESUMEN + IA -->
-        <div class="card">
-            <h2>📊 Resumen del ciclo</h2>
-            <div id="cycleSummary"></div>
-            <button id="analyzeBtn" class="full-width">Analizar mi ciclo 🧠</button>
+        <!-- 📅 CALENDARIO -->
+        <div class="card calendar-card">
+            <h2><i class="fa-solid fa-calendar-days"></i> Calendario</h2>
+            <div id="calendar-header">
+                <button id="prev">&lt;</button>
+                <span id="monthYear">Octubre 2026</span>
+                <button id="next">&gt;</button>
+            </div>
+            <div id="calendar"></div>
         </div>
 
-        <div class="card">
-            <h2><i class="fa-solid fa-chart-simple"></i> Análisis de Intensidad</h2>
-            <div class="chart-container" style="position: relative; height:150px; width:100%">
-                <canvas id="chart"></canvas>
+        <!-- 🌿 FASE VISUAL -->
+        <div class="card phase-card">
+            <h2>🌿 Fase Actual</h2>
+            <div class="phase-visual" id="phaseVisual">
+                <div class="phase-badge" id="phaseBadge">—</div>
+                <p class="phase-detail" id="phaseDetail">Registra tu ciclo</p>
+                <div class="phase-progress-bar">
+                    <div class="phase-progress-fill" id="phaseProgressFill"></div>
+                </div>
+                <p class="phase-day-info" id="phaseDayInfo"></p>
             </div>
         </div>
 
-        <div class="card">
+        <!-- ✍️ REGISTRO DEL DÍA -->
+        <div class="card register-card">
             <h2><i class="fa-solid fa-pen-to-square"></i> Registro del Día <span id="reg-date-title"></span></h2>
             <div class="form-group">
                 <p>¿Inició tu periodo hoy?</p>
                 <button class="toggle-btn">No</button>
             </div>
-            <p>Nivel de intensidad:</p>
+            <p class="field-label">Nivel de intensidad:</p>
             <div class="btn-group">
                 <button class="btn-small">Leve</button>
                 <button class="btn-small active">Media</button>
                 <button class="btn-small">Fuerte</button>
             </div>
-            <textarea placeholder="Notas (dolor, humor, fatiga...)" rows="2"></textarea>
-
-            <!-- BOTONES ACTUALIZADOS -->
+            <textarea id="notesArea" placeholder="Notas (dolor, humor, fatiga, mareos...)" rows="2"></textarea>
+            <div id="moodFeedback" class="mood-feedback"></div>
             <button id="saveBtn" class="full-width">Guardar Registro</button>
             <button class="reset-btn">Resetear Día</button>
-
         </div>
 
-        <!-- 📜 HISTORIAL COLAPSABLE -->
+        <!-- 📊 RESUMEN + IA -->
+        <div class="card summary-card">
+            <h2>📊 Resumen del ciclo</h2>
+            <div id="cycleSummary"></div>
+            <button id="analyzeBtn" class="full-width">Analizar mi ciclo 🧠</button>
+        </div>
+
+        <!-- 📈 GRÁFICO -->
+        <div class="card chart-card">
+            <h2><i class="fa-solid fa-chart-simple"></i> Intensidad</h2>
+            <div class="chart-container" style="position: relative; height:160px; width:100%">
+                <canvas id="chart"></canvas>
+            </div>
+        </div>
+
+        <!-- 📜 HISTORIAL -->
         <div class="card history-card">
             <h2>
-                <i class="fa-solid fa-clock-rotate-left"></i> Historial de Ciclos
+                <i class="fa-solid fa-clock-rotate-left"></i> Historial
                 <button id="historyToggle" class="history-toggle-btn">
                     <i class="fa-solid fa-chevron-down"></i>
                 </button>
@@ -129,20 +120,21 @@
             </div>
         </div>
 
-        <div class="card chat-container">
-            <h2><i class="fa-solid fa-robot"></i> Asistente IA</h2>
+        <!-- 🤖 ASISTENTE IA -->
+        <div class="card chat-card bento-span-2">
+            <h2><i class="fa-solid fa-robot"></i> Asistente Yosseling</h2>
             <div id="chatBox">
-                <div class="msg ai">¡Hola! Soy tu asistente de salud menstrual. Pregúntame sobre tu ciclo, síntomas o bienestar.</div>
+                <div class="msg ai">¡Hola! Soy Yosseling, tu asistente de salud menstrual. Pregúntame sobre tu ciclo, síntomas o bienestar. 💛</div>
             </div>
             <div class="chat-input">
-                <input type="text" placeholder="Pregúntale a tu asistente...">
-                <button><i class="fa-solid fa-paper-plane"></i></button>
+                <input type="text" id="chatInput" placeholder="Pregúntale a tu asistente...">
+                <button id="sendMsgBtn"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
 
     </div>
 
-    <!-- TOAST NOTIFICACIÓN -->
+    <!-- TOAST -->
     <div id="toast" class="toast"></div>
 
     <script src="script.js"></script>

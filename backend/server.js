@@ -8,17 +8,133 @@ const axios = require("axios");
 const path = require("path");
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // ===== SERVIR FRONTEND =====
-app.use(express.static(path.join(__dirname, "../frontend")));
+app.use(express.static(path.join(__dirname, "..")));
 
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "../frontend/index.html"));
+    res.sendFile(path.join(__dirname, "../index.html"));
 });
 
-// ✅ Usar la API KEY desde .env
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+// ===== API KEYS =====
+const API_KEYS = {
+    groq: process.env.GROQ_API_KEY,
+    openai: process.env.OPENAI_API_KEY,
+    gemini: process.env.GEMINI_API_KEY,
+    openrouter: process.env.OPENROUTER_API_KEY,
+    cerebras: process.env.CEREBRAS_API_KEY,
+};
+
+const DEFAULT_MODEL = process.env.AI_MODEL || "llama-3.1-8b-instant";
+const DEFAULT_PROVIDER = process.env.AI_PROVIDER || "groq";
+
+// ===== CONFIGURACIÓN DE PROVEEDORES =====
+const PROVIDERS = {
+    groq: {
+        url: "https://api.groq.com/openai/v1/chat/completions",
+        key: API_KEYS.groq,
+        model: "llama-3.1-8b-instant",
+        buildHeaders: (key) => ({
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+        }),
+        buildBody: (messages, model) => ({ model: model || "llama-3.1-8b-instant", messages, temperature: 0.7 }),
+        parseResponse: (data) => data.data.choices[0].message.content,
+    },
+    openai: {
+        url: "https://api.openai.com/v1/chat/completions",
+        key: API_KEYS.openai,
+        model: "gpt-4o-mini",
+        buildHeaders: (key) => ({
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+        }),
+        buildBody: (messages, model) => ({ model: model || "gpt-4o-mini", messages, temperature: 0.7 }),
+        parseResponse: (data) => data.data.choices[0].message.content,
+    },
+    openrouter: {
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        key: API_KEYS.openrouter,
+        model: "meta-llama/llama-3.1-8b-instruct:free",
+        buildHeaders: (key) => ({
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+        }),
+        buildBody: (messages, model) => ({ model: model || "meta-llama/llama-3.1-8b-instruct:free", messages, temperature: 0.7 }),
+        parseResponse: (data) => data.data.choices[0].message.content,
+    },
+    cerebras: {
+        url: "https://api.cerebras.ai/v1/chat/completions",
+        key: API_KEYS.cerebras,
+        model: "llama-3.1-8b-instant",
+        buildHeaders: (key) => ({
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+        }),
+        buildBody: (messages, model) => ({ model: model || "llama-3.1-8b-instant", messages, temperature: 0.7 }),
+        parseResponse: (data) => data.data.choices[0].message.content,
+    },
+    gemini: {
+        url: (key, model) =>
+            `https://generativelanguage.googleapis.com/v1beta/models/${model || "gemini-1.5-flash"}:generateContent?key=${key}`,
+        key: API_KEYS.gemini,
+        model: "gemini-1.5-flash",
+        buildHeaders: () => ({ "Content-Type": "application/json" }),
+        buildBody: (messages, model) => ({
+            contents: messages.map((m) => ({
+                role: m.role === "assistant" ? "model" : "user",
+                parts: [{ text: m.content }],
+            })),
+            systemInstruction: messages.find((m) => m.role === "system")
+                ? { parts: [{ text: messages.find((m) => m.role === "system").content }] }
+                : undefined,
+            generationConfig: { temperature: 0.7 },
+        }),
+        parseResponse: (data) => data.data.candidates[0].content.parts[0].text,
+    },
+};
+
+// ===== ORDEN DE FALLBACK =====
+const FALLBACK_ORDER = ["groq", "openrouter", "cerebras", "openai", "gemini"];
+
+// ===== LLAMAR IA CON FALLBACK AUTOMÁTICO =====
+async function callAI(messages, preferredProvider, preferredModel) {
+    let order = FALLBACK_ORDER;
+
+    if (preferredProvider && PROVIDERS[preferredProvider] && API_KEYS[preferredProvider]) {
+        order = [preferredProvider, ...FALLBACK_ORDER.filter((p) => p !== preferredProvider)];
+    }
+
+    let lastError = null;
+
+    for (let providerName of order) {
+        let provider = PROVIDERS[providerName];
+        if (!provider || !provider.key) continue;
+
+        try {
+            let url = typeof provider.url === "function"
+                ? provider.url(provider.key, preferredModel)
+                : provider.url;
+
+            let body = provider.buildBody(messages, preferredModel);
+            let headers = provider.buildHeaders(provider.key);
+
+            let response = await axios.post(url, body, { headers, timeout: 15000 });
+
+            if (response.data) {
+                let content = provider.parseResponse(response);
+                if (content) return { content, provider: providerName };
+            }
+        } catch (err) {
+            lastError = err;
+            console.warn(`Provider ${providerName} failed:`, err.response?.status || err.message);
+            continue;
+        }
+    }
+
+    throw new Error(lastError ? lastError.message : "All providers failed");
+}
 
 // ===== CONSTRUIR CONTEXTO DEL CICLO PARA LA IA =====
 function buildCycleContextString(cycleContext) {
@@ -54,87 +170,144 @@ function buildCycleContextString(cycleContext) {
 // ===== CHAT IA =====
 app.post("/chat", async (req, res) => {
     try {
-        const cycleContext = req.body.cycleContext || null;
-        const contextStr = buildCycleContextString(cycleContext);
+        const { message, cycleContext, provider, model, messages: fullMessages } = req.body;
 
-        const systemContent = `Eres un asistente experto en salud menstrual, ovulación y fases del ciclo. Responde claro, empático y útil.\n\nContexto actual del ciclo de la usuaria:\n${contextStr}\n\nUsa este contexto para responder preguntas como "¿Cuándo me toca?" o "¿Cuántos días faltan?" de forma personalizada.`;
+        let contextStr = buildCycleContextString(cycleContext);
 
-        const response = await axios.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            {
-                model: "llama-3.1-8b-instant",
-                messages: [
-                    {
-                        role: "system",
-                        content: systemContent
-                    },
-                    {
-                        role: "user",
-                        content: req.body.message
-                    }
-                ]
-            },
-            {
-                headers: {
-                    "Authorization": `Bearer ${GROQ_API_KEY}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
+        const systemContent = `Eres Yosseling, un asistente experto en salud menstrual, ovulación y fases del ciclo. Responde claro, empático, cálido y útil. Usa un tono cercano y amable.\n\nContexto actual del ciclo de la usuaria:\n${contextStr}\n\nUsa este contexto para responder preguntas como "¿Cuándo me toca?" o "¿Cuántos días faltan?" de forma personalizada. Sé breve en tus respuestas (2-4 frases).`;
 
-        res.json({
-            reply: response.data.choices[0].message.content
-        });
+        let apiMessages = [
+            { role: "system", content: systemContent },
+            { role: "user", content: message },
+        ];
 
+        // Si viene con historial completo, usarlo
+        if (fullMessages && Array.isArray(fullMessages) && fullMessages.length > 0) {
+            apiMessages = [
+                { role: "system", content: systemContent },
+                ...fullMessages.filter(m => m.role !== "system"),
+            ];
+        }
+
+        const result = await callAI(apiMessages, provider, model);
+
+        res.json({ reply: result.content, provider: result.provider });
     } catch (error) {
-        console.error(error.response?.data || error.message);
-        res.json({ reply: "Lo siento, no pude responder en este momento. Intenta de nuevo más tarde." });
+        console.error("Chat error:", error.message);
+        res.status(200).json({
+            reply: "Lo siento, no pude responder en este momento. Pero estoy aquí para ti. 💛 Intenta de nuevo en un momento.",
+            provider: null,
+        });
     }
 });
 
 // ===== ANÁLISIS DE CICLO =====
 app.post("/analyze", async (req, res) => {
     try {
-        const data = req.body.data;
-        const cycleContext = req.body.cycleContext || null;
+        const { data, cycleContext, provider, model } = req.body;
         const contextStr = buildCycleContextString(cycleContext);
 
-        const systemContent = `Eres un experto en ciclos menstruales. Analiza datos y predice menstruación, ovulación y fases.\n\nContexto actual del ciclo:\n${contextStr}`;
+        const systemContent = `Eres un experto en ciclos menstruales. Analiza datos y predice menstruación, ovulación y fases. Da consejos útiles y breves.\n\nContexto actual del ciclo:\n${contextStr}`;
 
-        const response = await axios.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            {
-                model: "llama-3.1-8b-instant",
-                messages: [
-                    {
-                        role: "system",
-                        content: systemContent
-                    },
-                    {
-                        role: "user",
-                        content: `Analiza estos datos del ciclo: ${JSON.stringify(data)}`
-                    }
-                ]
-            },
-            {
-                headers: {
-                    "Authorization": `Bearer ${GROQ_API_KEY}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
+        const apiMessages = [
+            { role: "system", content: systemContent },
+            { role: "user", content: `Analiza estos datos del ciclo: ${JSON.stringify(data)}` },
+        ];
 
-        res.json({
-            result: response.data.choices[0].message.content
-        });
+        const result = await callAI(apiMessages, provider, model);
 
+        res.json({ result: result.content, provider: result.provider });
     } catch (error) {
-        console.error(error.response?.data || error.message);
-        res.json({ result: "No pude analizar los datos en este momento. Intenta más tarde." });
+        console.error("Analyze error:", error.message);
+        res.status(200).json({
+            result: "No pude analizar los datos en este momento. Intenta más tarde.",
+            provider: null,
+        });
+    }
+});
+
+// ===== ANÁLISIS DE ESTADO DE ÁNIMO =====
+app.post("/analyze-mood", async (req, res) => {
+    try {
+        const { notes, cycleContext, provider, model } = req.body;
+
+        if (!notes || !notes.trim()) {
+            return res.json({
+                mood: "neutral",
+                message: "",
+                notification: "",
+                provider: null,
+            });
+        }
+
+        let contextStr = buildCycleContextString(cycleContext);
+
+        const systemContent = `Eres Yosseling, un asistente empático de salud menstrual. Analizas las notas de la usuaria sobre su estado físico y emocional durante el ciclo.
+
+Tu tarea:
+1. Detectar el tono emocional y físico del mensaje (dolor, malestar, cansancio, mareos, tristeza, cambios de humor, etc.)
+2. Generar una respuesta empática, bonita, corta y motivadora para alegrarle el día.
+3. Generar un mensaje corto para una notificación del navegador (máximo 100 caracteres).
+
+Responde SIEMPRE en formato JSON exacto:
+{"mood": "negative|neutral|positive", "message": "respuesta empática", "notification": "mensaje corto para notificación"}
+
+Contexto del ciclo: ${contextStr}`;
+
+        const apiMessages = [
+            { role: "system", content: systemContent },
+            { role: "user", content: `Notas de la usuaria: "${notes}"` },
+        ];
+
+        const result = await callAI(apiMessages, provider, model);
+        let parsed;
+
+        try {
+            // Intentar parsear JSON directamente
+            parsed = JSON.parse(result.content);
+        } catch {
+            // Intentar extraer JSON de la respuesta
+            let jsonMatch = result.content.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                try {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } catch {
+                    parsed = null;
+                }
+            } else {
+                parsed = null;
+            }
+        }
+
+        if (parsed && parsed.mood && parsed.message) {
+            res.json({
+                mood: parsed.mood,
+                message: parsed.message,
+                notification: parsed.notification || parsed.message.substring(0, 100),
+                provider: result.provider,
+            });
+        } else {
+            // Fallback: usar la respuesta como mensaje directo
+            res.json({
+                mood: "neutral",
+                message: result.content,
+                notification: result.content.substring(0, 100),
+                provider: result.provider,
+            });
+        }
+    } catch (error) {
+        console.error("Mood analysis error:", error.message);
+        res.status(200).json({
+            mood: "neutral",
+            message: "",
+            notification: "",
+            provider: null,
+        });
     }
 });
 
 // ===== INICIAR SERVIDOR =====
-app.listen(3000, () => {
-    console.log("Servidor corriendo en http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

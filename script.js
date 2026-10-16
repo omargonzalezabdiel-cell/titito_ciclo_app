@@ -1,32 +1,32 @@
 // ===== CONFIG =====
-const API_URL = "https://retail-cartridge-unearth.ngrok-free.dev";
+const API_URL = ""; // Usa el mismo servidor Express (rutas relativas)
 const DEFAULT_CYCLE_LENGTH = 28;
 const NOTIFICATION_THRESHOLD_DAYS = 3;
 
 // ===== SELECTORES =====
 const calendarGrid = document.getElementById("calendar");
 const monthYearLabel = document.getElementById("monthYear");
-const predictionLabel = document.querySelector(".big-text");
+const predictionLabel = document.querySelector(".big-text") || document.getElementById("countdownNumber");
 const predictionSubtext = document.querySelector(".card.highlight p:last-child");
 
 // Formulario
 const regDateTitle = document.getElementById("reg-date-title");
 const toggleMenstruationBtn = document.querySelector(".toggle-btn");
 const intensityButtons = document.querySelectorAll(".btn-small");
-const notesArea = document.querySelector("textarea");
+const notesArea = document.getElementById("notesArea");
 const saveBtn = document.getElementById("saveBtn");
 const resetBtn = document.querySelector(".reset-btn");
+const moodFeedback = document.getElementById("moodFeedback");
 
 // Chat
 const chatBox = document.getElementById("chatBox");
-const chatInput = document.querySelector(".chat-input input");
-const sendMsgBtn = document.querySelector(".chat-input button");
+const chatInput = document.getElementById("chatInput");
+const sendMsgBtn = document.getElementById("sendMsgBtn");
 
 // Nuevos elementos
 const quickRegisterBtn = document.getElementById("quickRegisterBtn");
 const countdownNumber = document.getElementById("countdownNumber");
 const countdownDate = document.getElementById("countdownDate");
-const phaseIndicator = document.getElementById("phaseIndicator");
 const phaseRing = document.getElementById("phaseRing");
 const phaseTitleEl = document.querySelector(".phase-info .phase-title");
 const phaseDescEl = document.querySelector(".phase-info .phase-desc");
@@ -48,6 +48,7 @@ let currentIntensity = 2;
 let chartInstance = null;
 let isMenstruation = false;
 let notificationsEnabled = false;
+let moodNotificationTimers = [];
 let cycleSettings = JSON.parse(localStorage.getItem("cycleSettings")) || {
     notifications: false,
     advanceDays: NOTIFICATION_THRESHOLD_DAYS
@@ -70,6 +71,13 @@ function showToast(message, duration = 3000) {
     setTimeout(() => toast.classList.remove("show"), duration);
 }
 
+// ===== ESCAPE HTML para prevenir XSS =====
+function escapeHtml(text) {
+    let div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // ===== OBTENER CICLOS REGISTRADOS (inicios de periodo) =====
 function getCycleStarts(data) {
     return Object.keys(data)
@@ -90,7 +98,6 @@ function getCycleStarts(data) {
 function getAverageCycleLength(data) {
     let starts = getCycleStarts(data);
     if (starts.length < 2) return DEFAULT_CYCLE_LENGTH;
-
     let diffs = [];
     for (let i = 1; i < starts.length; i++) {
         diffs.push((starts[i].date - starts[i - 1].date) / (1000 * 60 * 60 * 24));
@@ -102,7 +109,6 @@ function getAverageCycleLength(data) {
 function predictNextCycle(data) {
     let starts = getCycleStarts(data);
     if (starts.length === 0) return null;
-
     let avgLength = getAverageCycleLength(data);
     let lastStart = starts[starts.length - 1].date;
     let next = new Date(lastStart);
@@ -172,7 +178,6 @@ function renderPhase(data) {
     if (phaseProgressFill) phaseProgressFill.style.width = phase.progress + "%";
     if (phaseDayInfo) phaseDayInfo.textContent = phase.dayInfo;
 
-    // Color del anillo según fase
     if (phaseRing) {
         phaseRing.className = "phase-ring";
         if (phase.name.includes("Menstruación")) phaseRing.classList.add("ring-menstruation");
@@ -197,16 +202,14 @@ function renderCountdown(data) {
     today.setHours(0, 0, 0, 0);
     let diff = Math.ceil((prediction - today) / (1000 * 60 * 60 * 24));
 
-    if (countdownNumber) {
-        countdownNumber.textContent = diff > 0 ? diff : "Hoy";
-    }
+    if (countdownNumber) countdownNumber.textContent = diff > 0 ? diff : "Hoy";
     if (countdownDate) {
         let opts = { day: "numeric", month: "long", year: "numeric" };
         countdownDate.textContent = "Fecha estimada: " + prediction.toLocaleDateString("es-ES", opts);
     }
 }
 
-// ===== REGISTRO RÁPIDO: Marcar inicio de regla hoy =====
+// ===== REGISTRO RÁPIDO =====
 function quickRegisterToday() {
     let today = new Date();
     let dateKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
@@ -220,13 +223,14 @@ function quickRegisterToday() {
 
     saveData(data);
     selectedDateKey = dateKey;
-    renderCalendar();
-    renderHistory();
-    renderCountdown(data);
-    showToast("✅ Registro guardado: inicio de periodo hoy");
-
-    // Verificar notificaciones después de registrar
+    renderAll();
+    showToast("Registro guardado: inicio de periodo hoy");
     checkNotificationAlert(data);
+
+    // Si hay notas, analizar mood
+    if (notesArea.value.trim()) {
+        analyzeMood(notesArea.value.trim());
+    }
 }
 
 // ===== RENDERIZAR HISTORIAL =====
@@ -248,7 +252,6 @@ function renderHistory() {
     historyList.innerHTML = starts.slice().reverse().map((s, idx) => {
         let realIdx = starts.length - 1 - idx;
         let cycleNum = realIdx + 1;
-        let nextDate = null;
         if (realIdx < starts.length - 1) {
             let days = Math.round((starts[realIdx + 1].date - s.date) / (1000 * 60 * 60 * 24));
             return `
@@ -261,7 +264,7 @@ function renderHistory() {
                         <span class="history-duration">Duración: ${days} días</span>
                         <span class="history-intensity">Intensidad: ${s.intensity}/3</span>
                     </div>
-                    ${s.notes ? `<p class="history-notes">${s.notes}</p>` : ""}
+                    ${s.notes ? `<p class="history-notes">${escapeHtml(s.notes)}</p>` : ""}
                 </li>`;
         } else {
             return `
@@ -271,10 +274,10 @@ function renderHistory() {
                         <span class="history-date">${s.date.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}</span>
                     </div>
                     <div class="history-item-details">
-                        <span class="history-duration">Próximo estimado: ~${avgLen} días</span>
+                        <span class="history-duration">Próximo: ~${avgLen} días</span>
                         <span class="history-intensity">Intensidad: ${s.intensity}/3</span>
                     </div>
-                    ${s.notes ? `<p class="history-notes">${s.notes}</p>` : ""}
+                    ${s.notes ? `<p class="history-notes">${escapeHtml(s.notes)}</p>` : ""}
                 </li>`;
         }
     }).join("");
@@ -324,11 +327,7 @@ function requestNotificationPermission() {
 function sendNotification(title, body) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
     try {
-        new Notification(title, {
-            body: body,
-            icon: "🌸",
-            tag: "cycle-alert"
-        });
+        new Notification(title, { body, tag: "cycle-alert" });
     } catch (e) {
         console.warn("Notification error:", e);
     }
@@ -345,26 +344,17 @@ function checkNotificationAlert(data) {
     let diff = Math.ceil((prediction - today) / (1000 * 60 * 60 * 24));
     let threshold = cycleSettings.advanceDays || NOTIFICATION_THRESHOLD_DAYS;
 
+    let todayKey = today.toDateString();
+    let lastNotif = localStorage.getItem("lastNotifDate");
+
+    if (lastNotif === todayKey) return;
+
     if (diff > 0 && diff <= threshold) {
-        let lastNotif = localStorage.getItem("lastNotifDate");
-        let todayKey = today.toDateString();
-        if (lastNotif !== todayKey) {
-            sendNotification(
-                "🌸 Tu periodo se acerca",
-                `Faltan ${diff} días para tu próximo periodo estimado. ¡Prepárate!`
-            );
-            localStorage.setItem("lastNotifDate", todayKey);
-        }
+        sendNotification("🌸 Tu periodo se acerca", `Faltan ${diff} días para tu próximo periodo. ¡Prepárate!`);
+        localStorage.setItem("lastNotifDate", todayKey);
     } else if (diff <= 0) {
-        let lastNotif = localStorage.getItem("lastNotifDate");
-        let todayKey = today.toDateString();
-        if (lastNotif !== todayKey) {
-            sendNotification(
-                "🩸 Tu periodo podría haber empezado",
-                "¿Inició tu periodo hoy? Recuerda registrarlo en la app."
-            );
-            localStorage.setItem("lastNotifDate", todayKey);
-        }
+        sendNotification("🩸 Tu periodo podría haber empezado", "¿Inició tu periodo hoy? Recuerda registrarlo.");
+        localStorage.setItem("lastNotifDate", todayKey);
     }
 }
 
@@ -378,6 +368,7 @@ if (notifToggle) {
             notificationsEnabled = false;
             cycleSettings.notifications = false;
             localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
+            clearMoodTimers();
             showToast("Notificaciones desactivadas");
         }
     };
@@ -393,7 +384,7 @@ function renderAlerts(data) {
     let starts = getCycleStarts(data);
 
     if (starts.length === 0) {
-        list.innerHTML = `<li class="alert-info">📋 Registra el inicio de tu periodo para recibir alertas</li>`;
+        list.innerHTML = `<li class="alert-info">Registra el inicio de tu periodo para recibir alertas</li>`;
         return;
     }
 
@@ -458,7 +449,7 @@ function getCycleContext() {
     let phase = getCyclePhase(data);
     let avgLen = getAverageCycleLength(data);
 
-    let context = {
+    return {
         totalCycles: starts.length,
         averageCycleLength: avgLen,
         currentPhase: phase ? phase.name : "desconocida",
@@ -468,53 +459,21 @@ function getCycleContext() {
         recentIntensities: starts.slice(-3).map(s => s.intensity),
         lastNotes: starts.length > 0 ? starts[starts.length - 1].notes : null
     };
-
-    return context;
-}
-
-function buildCycleContextString() {
-    let ctx = getCycleContext();
-    let parts = [];
-
-    if (ctx.totalCycles === 0) {
-        parts.push("La usuario aún no ha registrado ningún ciclo menstrual.");
-    } else {
-        parts.push(`Estado actual del ciclo: fase ${ctx.currentPhase}, día ${ctx.cycleDay} del ciclo.`);
-        parts.push(`Duración promedio del ciclo: ${ctx.averageCycleLength} días.`);
-        parts.push(`Total de ciclos registrados: ${ctx.totalCycles}.`);
-
-        if (ctx.daysUntilNext !== null) {
-            if (ctx.daysUntilNext > 0) {
-                parts.push(`Faltan ${ctx.daysUntilNext} días para el próximo periodo (estimado: ${ctx.nextPeriodDate}).`);
-            } else {
-                parts.push(`El próximo periodo debería haber comenzado (estimado: ${ctx.nextPeriodDate}).`);
-            }
-        }
-
-        if (ctx.recentIntensities.length > 0) {
-            let intText = ctx.recentIntensities.map(i => i === 1 ? "leve" : i === 2 ? "media" : "fuerte").join(", ");
-            parts.push(`Intensidades recientes: ${intText}.`);
-        }
-
-        if (ctx.lastNotes) {
-            parts.push(`Últimas notas: "${ctx.lastNotes}".`);
-        }
-    }
-
-    return parts.join(" ");
 }
 
 // ===== TOGGLE =====
 function updateToggle(isOn) {
     isMenstruation = isOn;
-    toggleMenstruationBtn.textContent = isOn ? "Sí" : "No";
-    toggleMenstruationBtn.style.background = isOn ? "#d63384" : "#ddd";
-    toggleMenstruationBtn.style.color = isOn ? "white" : "#666";
+    if (toggleMenstruationBtn) {
+        toggleMenstruationBtn.textContent = isOn ? "Sí" : "No";
+        toggleMenstruationBtn.style.background = isOn ? "var(--accent)" : "var(--border)";
+        toggleMenstruationBtn.style.color = isOn ? "white" : "var(--text-muted)";
+    }
 }
 
-toggleMenstruationBtn.onclick = () => {
-    updateToggle(!isMenstruation);
-};
+if (toggleMenstruationBtn) {
+    toggleMenstruationBtn.onclick = () => updateToggle(!isMenstruation);
+}
 
 // ===== INTENSIDAD =====
 function setIntensity(level) {
@@ -530,6 +489,7 @@ intensityButtons.forEach((btn, i) => {
 
 // ===== CALENDARIO =====
 function renderCalendar() {
+    if (!calendarGrid) return;
     calendarGrid.innerHTML = "";
 
     let year = currentDate.getFullYear();
@@ -543,11 +503,6 @@ function renderCalendar() {
 
     let data = getData();
     let prediction = predictNextCycle(data);
-
-    if (prediction) {
-        let diff = Math.ceil((prediction - new Date()) / (1000*60*60*24));
-        predictionLabel.textContent = diff > 0 ? `Faltan ${diff} días` : "Ciclo en curso";
-    }
 
     const days = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
     days.forEach(d => {
@@ -566,6 +521,11 @@ function renderCalendar() {
         let div = document.createElement("div");
         div.classList.add("day");
 
+        // Marcar si tiene registro (cualquier tipo)
+        if (data[dateKey]) {
+            div.classList.add("has-log");
+        }
+
         if (data[dateKey]?.menstruation) {
             div.classList.add("menstruation");
             div.innerHTML = "🩸";
@@ -573,7 +533,6 @@ function renderCalendar() {
             div.textContent = day;
         }
 
-        // Marcar día predicho
         if (prediction) {
             let predDay = prediction.getDate();
             let predMonth = prediction.getMonth();
@@ -582,7 +541,6 @@ function renderCalendar() {
             }
         }
 
-        // Marcar hoy
         let today = new Date();
         if (year === today.getFullYear() && month === today.getMonth() && day === today.getDate()) {
             div.classList.add("today");
@@ -603,7 +561,7 @@ function renderCalendar() {
     renderCountdown(data);
 }
 
-// ===== SELECCIÓN =====
+// ===== SELECCIÓN DE DÍA — carga datos en el panel de registro =====
 function selectDay(dateKey) {
     selectedDateKey = dateKey;
 
@@ -613,12 +571,12 @@ function selectDay(dateKey) {
         updateToggle(data[dateKey].menstruation);
         isMenstruation = data[dateKey].menstruation;
         setIntensity(data[dateKey].intensity);
-        notesArea.value = data[dateKey].notes || "";
+        if (notesArea) notesArea.value = data[dateKey].notes || "";
     } else {
         updateToggle(false);
         isMenstruation = false;
         setIntensity(2);
-        notesArea.value = "";
+        if (notesArea) notesArea.value = "";
     }
 
     if (regDateTitle) {
@@ -627,45 +585,59 @@ function selectDay(dateKey) {
         regDateTitle.textContent = `(${d.toLocaleDateString("es-ES", { day: "numeric", month: "short" })})`;
     }
 
+    // Limpiar mood feedback anterior
+    if (moodFeedback) {
+        moodFeedback.classList.remove("show");
+        moodFeedback.innerHTML = "";
+    }
+
     renderCalendar();
 }
 
-// ===== GUARDAR =====
-saveBtn.onclick = () => {
-    if (!selectedDateKey) return showToast("⚠️ Selecciona un día primero");
+// ===== GUARDAR REGISTRO + ANÁLISIS DE MOOD =====
+if (saveBtn) {
+    saveBtn.onclick = async () => {
+        if (!selectedDateKey) return showToast("Selecciona un día primero");
 
-    let data = getData();
+        let data = getData();
+        let notes = notesArea.value.trim();
 
-    data[selectedDateKey] = {
-        menstruation: isMenstruation,
-        intensity: currentIntensity,
-        notes: notesArea.value.trim()
+        data[selectedDateKey] = {
+            menstruation: isMenstruation,
+            intensity: currentIntensity,
+            notes: notes
+        };
+
+        saveData(data);
+        renderAll();
+        showToast("Registro guardado");
+
+        // Analizar mood si hay notas
+        if (notes) {
+            await analyzeMood(notes);
+        }
     };
-
-    saveData(data);
-    renderCalendar();
-    renderHistory();
-    renderCountdown(data);
-    showToast("✅ Registro guardado");
-};
+}
 
 // ===== RESET =====
 if (resetBtn) {
     resetBtn.onclick = () => {
-        if (!selectedDateKey) return showToast("⚠️ Selecciona un día primero");
+        if (!selectedDateKey) return showToast("Selecciona un día primero");
 
         let data = getData();
         delete data[selectedDateKey];
 
         saveData(data);
-        renderCalendar();
-        renderHistory();
-        renderCountdown(data);
+        renderAll();
 
         updateToggle(false);
         isMenstruation = false;
-        notesArea.value = "";
+        if (notesArea) notesArea.value = "";
         setIntensity(2);
+        if (moodFeedback) {
+            moodFeedback.classList.remove("show");
+            moodFeedback.innerHTML = "";
+        }
         showToast("Día reseteado");
     };
 }
@@ -673,6 +645,75 @@ if (resetBtn) {
 // ===== REGISTRO RÁPIDO =====
 if (quickRegisterBtn) {
     quickRegisterBtn.onclick = quickRegisterToday;
+}
+
+// ===== ANÁLISIS DE ESTADO DE ÁNIMO POR IA =====
+async function analyzeMood(notes) {
+    if (!notes || !notes.trim()) return;
+
+    try {
+        let res = await fetch(`${API_URL}/analyze-mood`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                notes: notes,
+                cycleContext: getCycleContext()
+            })
+        });
+
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        let result = await res.json();
+
+        if (result.message && result.message.trim()) {
+            // Mostrar feedback empático en el panel
+            if (moodFeedback) {
+                moodFeedback.innerHTML = `<div class="mood-msg ${result.mood}">${escapeHtml(result.message)}</div>`;
+                moodFeedback.classList.add("show");
+            }
+
+            // Enviar notificación empática inmediatamente
+            if (notificationsEnabled && result.notification) {
+                sendNotification("🌸 Yosseling está contigo", result.notification);
+            }
+
+            // Programar notificaciones de ánimo durante el día
+            if (notificationsEnabled && result.mood === "negative") {
+                scheduleMoodNotifications();
+            }
+        }
+    } catch (err) {
+        console.warn("Mood analysis failed:", err.message);
+        // Fallback local: mensaje empático genérico
+        if (moodFeedback) {
+            moodFeedback.innerHTML = `<div class="mood-msg negative">💛 Un abrazo fuerte. Descansa y sé amable contigo hoy.</div>`;
+            moodFeedback.classList.add("show");
+        }
+    }
+}
+
+// ===== PROGRAMAR NOTIFICACIONES DE ÁNIMO =====
+function clearMoodTimers() {
+    moodNotificationTimers.forEach(t => clearTimeout(t));
+    moodNotificationTimers = [];
+}
+
+function scheduleMoodNotifications() {
+    clearMoodTimers();
+
+    let messages = [
+        { delay: 2 * 60 * 60 * 1000, title: "☕ Yosseling", body: "Tomate un descanso y un té caliente. Te mereces un momento para ti." },
+        { delay: 5 * 60 * 60 * 1000, title: "🌿 Yosseling", body: "Recuerda respirar profundo. Este malestar es temporal. ¡Eres fuerte!" },
+        { delay: 8 * 60 * 60 * 1000, title: "✨ Yosseling", body: "Hola de nuevo. ¿Cómo te sientes ahora? Cuídate mucho hoy." },
+    ];
+
+    messages.forEach(m => {
+        let timer = setTimeout(() => {
+            if (notificationsEnabled) {
+                sendNotification(m.title, m.body);
+            }
+        }, m.delay);
+        moodNotificationTimers.push(timer);
+    });
 }
 
 // ===== GRÁFICO =====
@@ -700,7 +741,8 @@ function renderChart(data) {
             labels: labels,
             datasets: [{
                 data: values,
-                backgroundColor: "#ec4899"
+                backgroundColor: "#ec4899",
+                borderRadius: 6,
             }]
         },
         options: {
@@ -709,10 +751,14 @@ function renderChart(data) {
                     beginAtZero: true,
                     max: 3,
                     ticks: {
-                        callback: function(v) {
-                            return ["", "Leve", "Media", "Fuerte"][v] || v;
-                        }
-                    }
+                        callback: function(v) { return ["", "Leve", "Media", "Fuerte"][v] || v; },
+                        color: "#a1a1aa",
+                    },
+                    grid: { color: "rgba(63,63,70,0.3)" },
+                },
+                x: {
+                    ticks: { color: "#a1a1aa" },
+                    grid: { color: "rgba(63,63,70,0.2)" },
                 }
             },
             plugins: {
@@ -722,32 +768,39 @@ function renderChart(data) {
     });
 }
 
-// ===== IA: ANÁLISIS DE CICLO CON CONTEXTO =====
+// ===== IA: ANÁLISIS DE CICLO =====
 async function analyzeCycle() {
+    if (predictionSubtext) {
+        predictionSubtext.innerHTML = "<b>Analizando...</b>";
+    }
     try {
         let res = await fetch(`${API_URL}/analyze`, {
             method: "POST",
-            headers: {"Content-Type":"application/json"},
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 data: getData(),
                 cycleContext: getCycleContext()
             })
         });
 
+        if (!res.ok) throw new Error("HTTP " + res.status);
         let result = await res.json();
-        predictionSubtext.innerHTML = `<b>${result.result}</b>`;
+        if (predictionSubtext) {
+            predictionSubtext.innerHTML = `<b>${escapeHtml(result.result)}</b>`;
+        }
     } catch {
-        predictionSubtext.innerHTML = "⚠️ IA no disponible";
+        if (predictionSubtext) {
+            predictionSubtext.innerHTML = "IA no disponible ahora mismo. Intenta más tarde.";
+        }
     }
 }
 
-// ===== BOTÓN IA =====
 const analyzeBtn = document.getElementById("analyzeBtn");
 if (analyzeBtn) {
     analyzeBtn.onclick = analyzeCycle;
 }
 
-// ===== CHAT CON CONTEXTO DEL CICLO =====
+// ===== CHAT — usa rutas relativas al mismo servidor =====
 async function sendMessage() {
     let msg = chatInput.value.trim();
     if (!msg) return;
@@ -756,30 +809,35 @@ async function sendMessage() {
     chatInput.value = "";
     chatBox.scrollTop = chatBox.scrollHeight;
 
+    // Indicador de "escribiendo..."
+    let typingDiv = document.createElement("div");
+    typingDiv.className = "msg ai";
+    typingDiv.textContent = "Escribiendo...";
+    chatBox.appendChild(typingDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+
     try {
         let res = await fetch(`${API_URL}/chat`, {
             method: "POST",
-            headers: {"Content-Type":"application/json"},
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 message: msg,
                 cycleContext: getCycleContext()
             })
         });
 
+        if (!res.ok) throw new Error("HTTP " + res.status);
         let data = await res.json();
+
+        typingDiv.remove();
         chatBox.innerHTML += `<div class="msg ai">${escapeHtml(data.reply)}</div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
-    } catch {
-        chatBox.innerHTML += `<div class="msg ai">⚠️ Error de conexión</div>`;
+    } catch (err) {
+        typingDiv.remove();
+        chatBox.innerHTML += `<div class="msg ai">No pude conectar con el servidor. Verifica que el backend esté corriendo.</div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
+        console.warn("Chat error:", err.message);
     }
-}
-
-// ===== ESCAPE HTML para prevenir XSS =====
-function escapeHtml(text) {
-    let div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // ===== NAVEGACIÓN CALENDARIO =====
@@ -806,8 +864,15 @@ if (chatInput) {
     });
 }
 
+// ===== RENDERIZAR TODO =====
+function renderAll() {
+    renderCalendar();
+    renderHistory();
+    renderCountdown(getData());
+}
+
 // ===== INIT =====
-sendMsgBtn.onclick = sendMessage;
+if (sendMsgBtn) sendMsgBtn.onclick = sendMessage;
 
 // Inicializar notificaciones si ya estaban activadas
 if (cycleSettings.notifications && "Notification" in window && Notification.permission === "granted") {
@@ -815,6 +880,5 @@ if (cycleSettings.notifications && "Notification" in window && Notification.perm
     if (notifToggle) notifToggle.checked = true;
 }
 
-renderCalendar();
-renderHistory();
+renderAll();
 checkNotificationAlert(getData());
