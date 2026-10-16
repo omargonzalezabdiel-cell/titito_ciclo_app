@@ -20,9 +20,45 @@ app.get("/", (req, res) => {
 // ✅ Usar la API KEY desde .env
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
+// ===== CONSTRUIR CONTEXTO DEL CICLO PARA LA IA =====
+function buildCycleContextString(cycleContext) {
+    if (!cycleContext || cycleContext.totalCycles === 0) {
+        return "La usuaria aún no ha registrado ningún ciclo menstrual.";
+    }
+
+    let parts = [];
+    parts.push(`Estado actual del ciclo: fase ${cycleContext.currentPhase}, día ${cycleContext.cycleDay} del ciclo.`);
+    parts.push(`Duración promedio del ciclo: ${cycleContext.averageCycleLength} días.`);
+    parts.push(`Total de ciclos registrados: ${cycleContext.totalCycles}.`);
+
+    if (cycleContext.daysUntilNext !== null && cycleContext.daysUntilNext !== undefined) {
+        if (cycleContext.daysUntilNext > 0) {
+            parts.push(`Faltan ${cycleContext.daysUntilNext} días para el próximo periodo (estimado: ${cycleContext.nextPeriodDate}).`);
+        } else {
+            parts.push(`El próximo periodo debería haber comenzado (estimado: ${cycleContext.nextPeriodDate}).`);
+        }
+    }
+
+    if (cycleContext.recentIntensities && cycleContext.recentIntensities.length > 0) {
+        let intText = cycleContext.recentIntensities.map(i => i === 1 ? "leve" : i === 2 ? "media" : "fuerte").join(", ");
+        parts.push(`Intensidades recientes: ${intText}.`);
+    }
+
+    if (cycleContext.lastNotes) {
+        parts.push(`Últimas notas de la usuaria: "${cycleContext.lastNotes}".`);
+    }
+
+    return parts.join(" ");
+}
+
 // ===== CHAT IA =====
 app.post("/chat", async (req, res) => {
     try {
+        const cycleContext = req.body.cycleContext || null;
+        const contextStr = buildCycleContextString(cycleContext);
+
+        const systemContent = `Eres un asistente experto en salud menstrual, ovulación y fases del ciclo. Responde claro, empático y útil.\n\nContexto actual del ciclo de la usuaria:\n${contextStr}\n\nUsa este contexto para responder preguntas como "¿Cuándo me toca?" o "¿Cuántos días faltan?" de forma personalizada.`;
+
         const response = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
             {
@@ -30,7 +66,7 @@ app.post("/chat", async (req, res) => {
                 messages: [
                     {
                         role: "system",
-                        content: "Eres un asistente experto en salud menstrual, ovulación y fases del ciclo. Responde claro y útil."
+                        content: systemContent
                     },
                     {
                         role: "user",
@@ -52,7 +88,7 @@ app.post("/chat", async (req, res) => {
 
     } catch (error) {
         console.error(error.response?.data || error.message);
-        res.json({ reply: "Error con la IA" });
+        res.json({ reply: "Lo siento, no pude responder en este momento. Intenta de nuevo más tarde." });
     }
 });
 
@@ -60,6 +96,10 @@ app.post("/chat", async (req, res) => {
 app.post("/analyze", async (req, res) => {
     try {
         const data = req.body.data;
+        const cycleContext = req.body.cycleContext || null;
+        const contextStr = buildCycleContextString(cycleContext);
+
+        const systemContent = `Eres un experto en ciclos menstruales. Analiza datos y predice menstruación, ovulación y fases.\n\nContexto actual del ciclo:\n${contextStr}`;
 
         const response = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -68,7 +108,7 @@ app.post("/analyze", async (req, res) => {
                 messages: [
                     {
                         role: "system",
-                        content: "Eres un experto en ciclos menstruales. Analiza datos y predice menstruación, ovulación y fases."
+                        content: systemContent
                     },
                     {
                         role: "user",
@@ -90,7 +130,7 @@ app.post("/analyze", async (req, res) => {
 
     } catch (error) {
         console.error(error.response?.data || error.message);
-        res.json({ result: "Error analizando datos" });
+        res.json({ result: "No pude analizar los datos en este momento. Intenta más tarde." });
     }
 });
 

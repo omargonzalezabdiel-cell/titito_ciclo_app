@@ -1,7 +1,7 @@
 /* Fuente y Fondo */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #f0fdf4; 
+    background: #f0fdf4;
     padding: 20px;
     text-align: center;
 }
@@ -51,6 +51,342 @@ h1 { color: #10b981; font-size: 2.2rem; margin-bottom: 5px; }
 .subtitle-pred { font-size: 0.8rem; opacity: 0.9; margin-bottom: 5px; }
 .big-text { font-size: 2rem; font-weight: bold; margin: 0; }
 
+/* ====== CICLO INTELIGENTE: ESTADO ====== */
+.cycle-status-card {
+    text-align: center;
+}
+
+.cycle-countdown {
+    margin-bottom: 18px;
+}
+
+.countdown-label {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.countdown-number {
+    font-size: 3rem;
+    font-weight: bold;
+    color: #ec4899;
+    margin: 0;
+    line-height: 1;
+}
+
+.countdown-date {
+    font-size: 0.85rem;
+    color: #888;
+    margin-top: 8px;
+}
+
+/* BOTÓN REGISTRO RÁPIDO */
+.quick-register-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #ec4899, #db2777);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.quick-register-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(236, 72, 153, 0.35);
+}
+
+.quick-register-btn:active {
+    transform: translateY(0);
+}
+
+/* INDICADOR DE FASE CON ANILLO */
+.phase-indicator {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px 0;
+}
+
+.phase-ring {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 4px solid #ddd;
+    flex-shrink: 0;
+    transition: border-color 0.4s;
+}
+
+.ring-menstruation { border-color: #ec4899; background: #fce7f3; }
+.ring-folicular { border-color: #10b981; background: #dcfce7; }
+.ring-ovulation { border-color: #f59e0b; background: #fef3c7; }
+.ring-luteal { border-color: #6366f1; background: #e0e7ff; }
+
+.phase-info {
+    text-align: left;
+}
+
+.phase-info .phase-title {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+}
+
+.phase-info .phase-desc {
+    font-size: 0.85rem;
+    color: #666;
+    margin: 2px 0 0 0;
+}
+
+/* ====== FASE VISUAL DETALLADA ====== */
+.phase-visual {
+    text-align: center;
+    padding: 10px 0;
+}
+
+.phase-badge {
+    display: inline-block;
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.phase-detail {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 12px;
+}
+
+.phase-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #eee;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.phase-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ec4899, #10b981);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.phase-day-info {
+    font-size: 0.75rem;
+    color: #999;
+    margin: 0;
+}
+
+/* ====== HISTORIAL ====== */
+.history-card h2 {
+    justify-content: space-between;
+}
+
+.history-toggle-btn {
+    background: none;
+    border: none;
+    color: #10b981;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0;
+    margin-left: auto;
+}
+
+.history-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    max-height: 500px;
+    opacity: 1;
+}
+
+.history-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+}
+
+.history-empty {
+    color: #999;
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 15px 0;
+}
+
+#historyList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.history-item {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-left: 3px solid #ec4899;
+    transition: transform 0.15s;
+}
+
+.history-item:hover {
+    transform: translateX(3px);
+}
+
+.history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.history-cycle-num {
+    font-weight: bold;
+    color: #333;
+    font-size: 0.9rem;
+}
+
+.history-date {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.history-item-details {
+    display: flex;
+    gap: 15px;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.history-duration { color: #10b981; }
+.history-intensity { color: #ec4899; }
+
+.history-notes {
+    font-size: 0.8rem;
+    color: #777;
+    font-style: italic;
+    margin: 5px 0 0 0;
+    padding: 0;
+}
+
+/* ====== NOTIFICACIONES TOGGLE ====== */
+.notif-toggle {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.notif-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #555;
+    cursor: pointer;
+}
+
+.notif-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #10b981;
+    cursor: pointer;
+}
+
+/* ====== ALERTAS MEJORADAS ====== */
+#alertsList {
+    padding-left: 0;
+    list-style: none;
+}
+
+#alertsList li {
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.alert-warn {
+    background: #fef2f2;
+    color: #b91c1c;
+    border-left: 3px solid #ef4444;
+}
+
+.alert-fertile {
+    background: #fff7ed;
+    color: #c2410c;
+    border-left: 3px solid #f97316;
+}
+
+.alert-info {
+    background: #f0fdf4;
+    color: #166534;
+    border-left: 3px solid #10b981;
+}
+
+/* ====== RESUMEN GRID ====== */
+.summary-empty {
+    color: #999;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    text-align: center;
+}
+
+.summary-item {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 10px 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.summary-num {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #10b981;
+}
+
+.summary-label {
+    font-size: 0.7rem;
+    color: #888;
+}
+
+/* ====== TOAST ====== */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #1f2937;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    z-index: 9999;
+    pointer-events: none;
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
 /* Calendario */
 #calendar-header {
     display: flex;
@@ -82,7 +418,8 @@ h1 { color: #10b981; font-size: 2.2rem; margin-bottom: 5px; }
 .day:hover { background: #dcfce7; }
 .menstruation { background: #ffe4e6; color: #ec4899; font-weight: bold; }
 .active-day { background: #10b981 !important; color: white !important; font-weight: bold; box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4); }
-.predicted { border: 2px dashed #10b981; }
+.predicted-day { border: 2px dashed #ec4899; }
+.today { outline: 2px solid #10b981; outline-offset: -2px; }
 
 /* Botones */
 .form-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
@@ -117,7 +454,7 @@ textarea {
 
 /* Chat */
 #chatBox { height: 160px; overflow-y: auto; background: #fafafa; padding: 10px; border-radius: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px;}
-.msg { padding: 10px 15px; border-radius: 15px; font-size: 0.85rem; max-width: 80%; }
+.msg { padding: 10px 15px; border-radius: 15px; font-size: 0.85rem; max-width: 80%; word-wrap: break-word; }
 .ai { background: #dcfce7; }
 .user { background: #ffe4e6; }
 
@@ -132,21 +469,6 @@ textarea {
 
 .phase-card {
     text-align: center;
-}
-
-.phase-title {
-    font-size: 1.3rem;
-    font-weight: bold;
-    color: #10b981;
-}
-
-.phase-desc {
-    font-size: 0.9rem;
-    color: #666;
-}
-
-#alertsList {
-    padding-left: 15px;
 }
 
 #alertsList li {

@@ -16,7 +16,7 @@
     </header>
 
     <div class="grid">
-        
+
         <div class="card calendar-card">
             <h2><i class="fa-solid fa-calendar-days"></i> Calendario</h2>
             <div id="calendar-header">
@@ -25,6 +25,26 @@
                 <button id="next">&gt;</button>
             </div>
             <div id="calendar">
+            </div>
+        </div>
+
+        <!-- 🌸 ESTADO INTELIGENTE DEL CICLO -->
+        <div class="card cycle-status-card">
+            <h2><i class="fa-solid fa-heart-pulse"></i> Estado del Ciclo Inteligente</h2>
+            <div class="cycle-countdown">
+                <p class="countdown-label">Días para tu próximo periodo</p>
+                <p class="countdown-number" id="countdownNumber">—</p>
+                <p class="countdown-date" id="countdownDate">Registra tu ciclo para empezar</p>
+            </div>
+            <button id="quickRegisterBtn" class="quick-register-btn">
+                <i class="fa-solid fa-drop"></i> Registrar inicio de regla hoy
+            </button>
+            <div class="phase-indicator" id="phaseIndicator">
+                <div class="phase-ring" id="phaseRing"></div>
+                <div class="phase-info">
+                    <p class="phase-title">Sin datos</p>
+                    <p class="phase-desc">Registra tu ciclo</p>
+                </div>
             </div>
         </div>
 
@@ -37,16 +57,27 @@
             </div>
         </div>
 
-        <!-- 🌿 FASE DEL CICLO -->
+        <!-- 🌿 FASE VISUAL -->
         <div class="card phase-card">
-            <h2>🌿 Estado del ciclo</h2>
-            <p class="phase-title">Sin datos</p>
-            <p class="phase-desc">Registra tu ciclo</p>
+            <h2>🌿 Fase Actual</h2>
+            <div class="phase-visual" id="phaseVisual">
+                <div class="phase-badge" id="phaseBadge">—</div>
+                <p class="phase-detail" id="phaseDetail">Registra tu ciclo para ver tu fase</p>
+                <div class="phase-progress-bar">
+                    <div class="phase-progress-fill" id="phaseProgressFill"></div>
+                </div>
+                <p class="phase-day-info" id="phaseDayInfo"></p>
+            </div>
         </div>
 
         <!-- 🔔 ALERTAS -->
         <div class="card">
             <h2>🔔 Alertas Inteligentes</h2>
+            <div class="notif-toggle">
+                <label>
+                    <input type="checkbox" id="notifToggle"> Activar notificaciones
+                </label>
+            </div>
             <ul id="alertsList"></ul>
         </div>
 
@@ -68,7 +99,7 @@
             <h2><i class="fa-solid fa-pen-to-square"></i> Registro del Día <span id="reg-date-title"></span></h2>
             <div class="form-group">
                 <p>¿Inició tu periodo hoy?</p>
-                <button class="toggle-btn">No</button> 
+                <button class="toggle-btn">No</button>
             </div>
             <p>Nivel de intensidad:</p>
             <div class="btn-group">
@@ -77,17 +108,31 @@
                 <button class="btn-small">Fuerte</button>
             </div>
             <textarea placeholder="Notas (dolor, humor, fatiga...)" rows="2"></textarea>
-            
+
             <!-- BOTONES ACTUALIZADOS -->
             <button id="saveBtn" class="full-width">Guardar Registro</button>
             <button class="reset-btn">Resetear Día</button>
 
         </div>
 
+        <!-- 📜 HISTORIAL COLAPSABLE -->
+        <div class="card history-card">
+            <h2>
+                <i class="fa-solid fa-clock-rotate-left"></i> Historial de Ciclos
+                <button id="historyToggle" class="history-toggle-btn">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </h2>
+            <div id="historyContent" class="history-content collapsed">
+                <p class="history-empty" id="historyEmpty">No hay ciclos registrados aún</p>
+                <ul id="historyList"></ul>
+            </div>
+        </div>
+
         <div class="card chat-container">
             <h2><i class="fa-solid fa-robot"></i> Asistente IA</h2>
             <div id="chatBox">
-                <div class="msg ai">¡Hola! Soy tu asistente. He notado que tus últimos dos ciclos fueron fuertes. ¿Quieres algunos consejos?</div>
+                <div class="msg ai">¡Hola! Soy tu asistente de salud menstrual. Pregúntame sobre tu ciclo, síntomas o bienestar.</div>
             </div>
             <div class="chat-input">
                 <input type="text" placeholder="Pregúntale a tu asistente...">
@@ -96,6 +141,9 @@
         </div>
 
     </div>
+
+    <!-- TOAST NOTIFICACIÓN -->
+    <div id="toast" class="toast"></div>
 
     <script src="script.js"></script>
 </body>
