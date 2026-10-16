@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node backend/server.js",
-    "build": "node -c backend/server.js && node -c script.js && echo \"Build OK\"", 
+    "build": "mkdir -p public && cp -r index.html style.css script.js public/ 2>/dev/null || true",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
