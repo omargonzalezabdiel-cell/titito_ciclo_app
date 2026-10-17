@@ -44,6 +44,7 @@ const phaseProgressFill = document.getElementById("phaseProgressFill");
 const phaseDayInfo = document.getElementById("phaseDayInfo");
 const notifToggle = document.getElementById("notifToggle");
 const notificationActionBtn = document.getElementById("notificationActionBtn");
+const notifDeniedBanner = document.getElementById("notifDeniedBanner");
 const historyToggle = document.getElementById("historyToggle");
 const historyContent = document.getElementById("historyContent");
 const historyList = document.getElementById("historyList");
@@ -410,40 +411,70 @@ function requestNotificationPermission() {
     }
 
     if (Notification.permission === "granted") {
-        notificationsEnabled = true;
-        cycleSettings.notifications = true;
-        localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
-        if (notifToggle) notifToggle.checked = true;
-        if (notificationActionBtn) { notificationActionBtn.classList.add("is-enabled"); notificationActionBtn.querySelector("span").textContent = "Notificaciones activadas"; }
-        startProactiveNotifications();
+        enableNotifications();
+        sendTestNotification();
         return true;
+    }
+
+    if (Notification.permission === "denied") {
+        showDeniedBanner();
+        showToast("Las notificaciones están bloqueadas. Revisa los permisos de tu navegador.");
+        return false;
     }
 
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-            notificationsEnabled = true;
-            cycleSettings.notifications = true;
-            localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
-            showToast("Notificaciones activadas");
-            if (notificationActionBtn) { notificationActionBtn.classList.add("is-enabled"); notificationActionBtn.querySelector("span").textContent = "Notificaciones activadas"; }
-            sendNotification("Titito Ciclo", "¡Notificaciones activadas! El Dr. Latigo te acompañará día a día.");
-            sendProactiveReminder();
-            startProactiveNotifications();
+            enableNotifications();
+            sendTestNotification();
         } else {
             notificationsEnabled = false;
             cycleSettings.notifications = false;
             localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
             if (notifToggle) notifToggle.checked = false;
-            showToast("Notificaciones desactivadas");
+            if (Notification.permission === "denied") showDeniedBanner();
+            showToast("Notificaciones no activadas");
         }
     });
 }
 
+function enableNotifications() {
+    notificationsEnabled = true;
+    cycleSettings.notifications = true;
+    localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
+    if (notifToggle) notifToggle.checked = true;
+    if (notificationActionBtn) {
+        notificationActionBtn.classList.add("is-enabled");
+        notificationActionBtn.querySelector("span").textContent = "Notificaciones activadas";
+    }
+    hideDeniedBanner();
+    startProactiveNotifications();
+}
+
+function sendTestNotification() {
+    let title = "Titito Ciclo · Dr. Latigo";
+    let body = "¡Notificaciones activadas! Ya recibirás mis mensajes cada 30 minutos en tu celular.";
+    if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
+        serviceWorkerRegistration.active.postMessage({ type: "SHOW_NOTIFICATION", title, body });
+    } else {
+        sendNotification(title, body);
+    }
+}
+
+function showDeniedBanner() {
+    if (notifDeniedBanner) notifDeniedBanner.hidden = false;
+}
+
+function hideDeniedBanner() {
+    if (notifDeniedBanner) notifDeniedBanner.hidden = true;
+}
+
 function sendNotification(title, body) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
-    let options = { body, tag: "cycle-alert", icon: "/icon-app.png", badge: "/logo.png" };
-    if (serviceWorkerRegistration) {
-        void serviceWorkerRegistration.showNotification(title, options).catch(() => new Notification(title, options));
+    let options = { body, tag: "titito-ciclo-motivation", icon: "/icon-app.png", badge: "/logo.png", vibrate: [200, 100, 200], renotify: true };
+    if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
+        void serviceWorkerRegistration.showNotification(title, options).catch(() => {
+            try { new Notification(title, options); } catch (e) { console.warn("Notification fallback failed:", e.message); }
+        });
         return;
     }
     try {
@@ -489,6 +520,9 @@ function sendProactiveReminder() {
 function startProactiveNotifications() {
     if (proactiveNotificationTimer) clearInterval(proactiveNotificationTimer);
     if (!notificationsEnabled) return;
+    if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
+        serviceWorkerRegistration.active.postMessage({ type: "START_MOTIVATIONAL_TIMER" });
+    }
     proactiveNotificationTimer = setInterval(sendProactiveReminder, 30 * 60 * 1000);
 }
 
@@ -532,6 +566,9 @@ if (notifToggle) {
             clearMoodTimers();
             if (proactiveNotificationTimer) clearInterval(proactiveNotificationTimer);
             proactiveNotificationTimer = null;
+            if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
+                serviceWorkerRegistration.active.postMessage({ type: "STOP_MOTIVATIONAL_TIMER" });
+            }
             proactiveToast?.classList.remove("show");
             showToast("Notificaciones desactivadas");
         }
@@ -1418,6 +1455,10 @@ if (cycleSettings.notifications && "Notification" in window && Notification.perm
     if (notifToggle) notifToggle.checked = true;
     if (notificationActionBtn) { notificationActionBtn.classList.add("is-enabled"); notificationActionBtn.querySelector("span").textContent = "Notificaciones activadas"; }
     startProactiveNotifications();
+}
+
+if ("Notification" in window && Notification.permission === "denied") {
+    showDeniedBanner();
 }
 
 void hydrateCycleData().then(() => {
