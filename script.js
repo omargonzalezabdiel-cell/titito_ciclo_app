@@ -45,6 +45,15 @@ const phaseDayInfo = document.getElementById("phaseDayInfo");
 const notifToggle = document.getElementById("notifToggle");
 const notificationActionBtn = document.getElementById("notificationActionBtn");
 const notifDeniedBanner = document.getElementById("notifDeniedBanner");
+const predictiveTip = document.getElementById("predictiveTip");
+const predictiveTipText = document.getElementById("predictiveTipText");
+const waterCups = document.getElementById("waterCups");
+const waterCount = document.getElementById("waterCount");
+const waterGoalText = document.getElementById("waterGoalText");
+const waterGoalDisplay = document.getElementById("waterGoalDisplay");
+const waterPlus = document.getElementById("waterPlus");
+const waterMinus = document.getElementById("waterMinus");
+const waterResetBtn = document.getElementById("waterResetBtn");
 const historyToggle = document.getElementById("historyToggle");
 const historyContent = document.getElementById("historyContent");
 const historyList = document.getElementById("historyList");
@@ -263,6 +272,178 @@ function getCyclePhase(data) {
     }
 
     return { name: phase, desc, dayInfo, progress: Math.min(100, Math.max(0, progress)), cycleDay: diff + 1 };
+}
+
+// ===== MOTOR DE PREDICCIÓN DE SÍNTOMAS =====
+const SYMPTOM_PATTERNS = /(dolor|cólico|colico|calambre|migraña|migraña|fatiga|cansancio|cansada|acne|acné|mareo|hinchazón|hinchazon|nausea|náusea|antojo|antojos|humor|triste|irritada|sensible|estresada|dolor de cabeza|retención|retencion)/i;
+
+function buildSymptomPredictions(data) {
+    let starts = getCycleStarts(data);
+    if (starts.length === 0) return [];
+
+    let patterns = {};
+    Object.keys(data).forEach(dateKey => {
+        let entry = data[dateKey];
+        if (!entry || !entry.notes || !entry.notes.trim()) return;
+        let parts = dateKey.split("-");
+        let entryDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        let lastStart = starts.filter(s => s.date <= entryDate).pop();
+        if (!lastStart) return;
+        let cycleDay = calendarDaysBetween(entryDate, lastStart.date) + 1;
+        let matches = entry.notes.match(SYMPTOM_PATTERNS);
+        if (!matches) return;
+        let symptom = matches[0].toLowerCase();
+        if (!patterns[symptom]) patterns[symptom] = [];
+        patterns[symptom].push(cycleDay);
+    });
+
+    let predictions = [];
+    Object.keys(patterns).forEach(symptom => {
+        let days = patterns[symptom];
+        if (days.length < 1) return;
+        let avgDay = Math.round(days.reduce((a, b) => a + b, 0) / days.length);
+        predictions.push({ symptom, avgCycleDay: avgDay, occurrences: days.length });
+    });
+    return predictions.sort((a, b) => b.occurrences - a.occurrences);
+}
+
+function getActiveSymptomPredictions(data) {
+    let phase = getCyclePhase(data);
+    if (!phase) return [];
+    let currentCycleDay = phase.cycleDay;
+    let allPredictions = buildSymptomPredictions(data);
+    return allPredictions
+        .map(p => ({ ...p, daysUntil: p.avgCycleDay - currentCycleDay }))
+        .filter(p => p.daysUntil >= 1 && p.daysUntil <= 2);
+}
+
+function renderPredictiveTip(data) {
+    if (!predictiveTip || !predictiveTipText) return;
+    let upcoming = getActiveSymptomPredictions(data);
+    if (upcoming.length === 0) {
+        predictiveTip.hidden = true;
+        return;
+    }
+    let top = upcoming[0];
+    let dayWord = top.daysUntil === 1 ? "mañana" : `en ${top.daysUntil} días`;
+    let symptomDisplay = top.symptom.replace(/dolor de cabeza/i, "dolor de cabeza").replace(/cólico|colico/i, "cólicos");
+    predictiveTipText.textContent = `💡 En ${dayWord} sueles experimentar ${symptomDisplay} según tu historial. Te sugiero descansar mejor hoy e hidratarte bien.`;
+    predictiveTip.hidden = false;
+}
+
+function getPredictiveTipForVoice() {
+    let data = getData();
+    let upcoming = getActiveSymptomPredictions(data);
+    if (upcoming.length === 0) return "";
+    let top = upcoming[0];
+    let dayWord = top.daysUntil === 1 ? "mañana" : `en ${top.daysUntil} días`;
+    return `Según tu historial, en ${dayWord} sueles tener ${top.symptom}. Te recomiendo descansar e hidratarte bien hoy como prevención.`;
+}
+
+// ===== RASTREADOR DE AGUA =====
+const WATER_GOAL_DEFAULT = 8;
+let waterGoal = WATER_GOAL_DEFAULT;
+let waterIntake = 0;
+
+function getTodayWaterKey() {
+    let today = getTodayStart();
+    return `water-${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+}
+
+function loadWaterIntake() {
+    let savedGoal = parseInt(localStorage.getItem("waterGoal")) || WATER_GOAL_DEFAULT;
+    waterGoal = savedGoal;
+    let todayKey = getTodayWaterKey();
+    let saved = localStorage.getItem(todayKey);
+    if (saved !== null) {
+        waterIntake = parseInt(saved) || 0;
+    } else {
+        waterIntake = 0;
+    }
+    let data = getData();
+    let todayDateKey = `${getTodayStart().getFullYear()}-${getTodayStart().getMonth() + 1}-${getTodayStart().getDate()}`;
+    if (data[todayDateKey] && typeof data[todayDateKey].waterIntake === "number") {
+        waterIntake = data[todayDateKey].waterIntake;
+    }
+}
+
+function saveWaterIntake() {
+    let todayKey = getTodayWaterKey();
+    localStorage.setItem(todayKey, String(waterIntake));
+    localStorage.setItem("waterGoal", String(waterGoal));
+    let data = getData();
+    let todayDateKey = `${getTodayStart().getFullYear()}-${getTodayStart().getMonth() + 1}-${getTodayStart().getDate()}`;
+    if (!data[todayDateKey]) {
+        data[todayDateKey] = { menstruation: false, intensity: 2, notes: "", waterIntake };
+    } else {
+        data[todayDateKey].waterIntake = waterIntake;
+    }
+    saveData(data);
+}
+
+function renderWaterTracker() {
+    if (!waterCups || !waterCount || !waterGoalText || !waterGoalDisplay) return;
+    waterCount.textContent = waterIntake;
+    waterGoalText.textContent = waterGoal;
+    waterGoalDisplay.textContent = waterGoal;
+    waterCups.innerHTML = "";
+    for (let i = 0; i < waterGoal; i++) {
+        let cup = document.createElement("div");
+        cup.className = "water-cup" + (i < waterIntake ? " filled" : "");
+        cup.innerHTML = '<i class="fa-solid fa-glass-water"></i>';
+        cup.onclick = () => {
+            waterIntake = i < waterIntake ? i : i + 1;
+            saveWaterIntake();
+            renderWaterTracker();
+            checkHydrationReminder();
+        };
+        waterCups.appendChild(cup);
+    }
+    if (waterIntake >= waterGoal) {
+        waterCups.classList.add("goal-reached");
+    } else {
+        waterCups.classList.remove("goal-reached");
+    }
+}
+
+if (waterPlus) {
+    waterPlus.onclick = () => {
+        if (waterIntake < waterGoal + 4) {
+            waterIntake++;
+            saveWaterIntake();
+            renderWaterTracker();
+            checkHydrationReminder();
+        }
+    };
+}
+if (waterMinus) {
+    waterMinus.onclick = () => {
+        if (waterIntake > 0) {
+            waterIntake--;
+            saveWaterIntake();
+            renderWaterTracker();
+        }
+    };
+}
+if (waterResetBtn) {
+    waterResetBtn.onclick = () => {
+        waterIntake = 0;
+        saveWaterIntake();
+        renderWaterTracker();
+        showToast("Conteo de agua reiniciado");
+    };
+}
+
+function checkHydrationReminder() {
+    if (!notificationsEnabled) return;
+    let hour = new Date().getHours();
+    if (hour < 15) return;
+    if (waterIntake >= Math.ceil(waterGoal / 2)) return;
+    let lastReminder = localStorage.getItem("lastHydrationReminder");
+    let todayKey = getTodayWaterKey();
+    if (lastReminder === todayKey) return;
+    sendNotification("💧 Dr. Latigo", "Veo que llevas pocos vasos de agua hoy. Beber un poco de agua ahora te ayudará a prevenir cólicos y fatiga.");
+    localStorage.setItem("lastHydrationReminder", todayKey);
 }
 
 // ===== RENDERIZAR FASE VISUAL =====
@@ -1178,6 +1359,7 @@ function speakDoctor(text) {
 function getLocalDoctorReply(message) {
     let normalizedMessage = message.toLowerCase();
     let context = getCycleContext();
+    let predictiveTip = getPredictiveTipForVoice();
     if (/(cómo ha estado|como ha estado|mi ciclo este|este mes|mi mes|resumen|cómo va|como va)/i.test(normalizedMessage)) {
         if (context.totalCycles === 0) return "Aún no tienes registros en tu calendario, Yosseling. Cuando anotes tu próximo periodo, podré darte un resumen personalizado de cómo va tu ciclo.";
         let summary = `Según tus registros, llevas ${context.totalCycles} ciclo(s) con un promedio de ${context.averageCycleLength} días. Estás en fase ${context.currentPhase}`;
@@ -1185,6 +1367,7 @@ function getLocalDoctorReply(message) {
         else summary += ".";
         if (context.irregularCycle) summary += ` He notado variaciones de ${context.cycleVariation} días entre ciclos; vale la pena vigilarlo.`;
         if (context.recentLogs && context.recentLogs.length > 0) summary += ` Tus últimos registros: ${context.recentLogs.slice(-5).join("; ")}.`;
+        if (predictiveTip) summary += ` ${predictiveTip}`;
         return summary;
     }
     if (/(dolor de cabeza|me dolía|me dolia|martes|jueves|ayer|antier)/i.test(normalizedMessage) && context.recentLogs.length > 0) {
@@ -1195,7 +1378,9 @@ function getLocalDoctorReply(message) {
         return "Para molestias leves puedes probar calor local, descanso, hidratación y movimiento suave. No tomes medicamentos nuevos sin confirmar que son seguros para ti; si el dolor es intenso, repentino o no mejora, busca atención médica.";
     }
     if (/(dolor|cólico|colico|calambre)/i.test(normalizedMessage)) {
-        return "Siento que tengas dolor. Para molestias leves, prueba calor local, hidratación y descanso. Si el dolor es intenso, repentino, diferente a lo habitual o viene con fiebre o desmayo, busca atención médica.";
+        let base = "Siento que tengas dolor. Para molestias leves, prueba calor local, hidratación y descanso. Si el dolor es intenso, repentino, diferente a lo habitual o viene con fiebre o desmayo, busca atención médica.";
+        if (predictiveTip) base += ` ${predictiveTip}`;
+        return base;
     }
     if (/(mareo|desmayo|náusea|nausea|vómito|vomito)/i.test(normalizedMessage)) {
         return "Gracias por contármelo. Siéntate o recuéstate, toma agua en pequeños sorbos y evita levantarte rápido. Si te desmayas o empeora, busca ayuda médica.";
@@ -1204,7 +1389,9 @@ function getLocalDoctorReply(message) {
         return "Te escucho, Yosseling. No tienes que resolverlo todo ahora. Respira despacio, date un momento y recuerda que pedir apoyo también es cuidarte.";
     }
     if (/(cansad|fatiga|agotad|sueño|sueno)/i.test(normalizedMessage)) {
-        return "Tu cuerpo merece una pausa. Toma agua, come algo suave si lo necesitas y busca un momento de descanso sin exigirte de más.";
+        let base = "Tu cuerpo merece una pausa. Toma agua, come algo suave si lo necesitas y busca un momento de descanso sin exigirte de más.";
+        if (predictiveTip) base += ` ${predictiveTip}`;
+        return base;
     }
     if (/(irregular|retraso|no me baja|se me adelantó|se me atraso|se me atrasó|período loco|periodo loco)/i.test(normalizedMessage)) {
         let context = getCycleContext();
@@ -1530,6 +1717,8 @@ function renderAll() {
     renderAlerts(data);
     renderSummary(data);
     renderCountdown(data);
+    renderPredictiveTip(data);
+    renderWaterTracker();
 }
 
 // ===== INIT =====
@@ -1555,6 +1744,8 @@ if ("Notification" in window && Notification.permission === "denied") {
 }
 
 void hydrateCycleData().then(() => {
+    loadWaterIntake();
     renderAll();
     checkNotificationAlert(getData());
+    checkHydrationReminder();
 });
