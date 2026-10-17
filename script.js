@@ -72,8 +72,10 @@ let proactiveNotificationTimer = null;
 let proactiveToastTimer = null;
 let cycleSettings = JSON.parse(localStorage.getItem("cycleSettings")) || {
     notifications: false,
-    advanceDays: NOTIFICATION_THRESHOLD_DAYS
+    advanceDays: NOTIFICATION_THRESHOLD_DAYS,
+    cycleLength: DEFAULT_CYCLE_LENGTH
 };
+cycleSettings.cycleLength = Number(cycleSettings.cycleLength) || DEFAULT_CYCLE_LENGTH;
 
 // ===== ALMACENAMIENTO INDEXEDDB =====
 function openCycleDatabase() {
@@ -182,13 +184,26 @@ function getCycleStarts(data) {
         .sort((a, b) => a.date - b.date);
 }
 
+function calendarDaysBetween(laterDate, earlierDate) {
+    let later = new Date(laterDate.getFullYear(), laterDate.getMonth(), laterDate.getDate());
+    let earlier = new Date(earlierDate.getFullYear(), earlierDate.getMonth(), earlierDate.getDate());
+    let laterUtc = Date.UTC(later.getFullYear(), later.getMonth(), later.getDate());
+    let earlierUtc = Date.UTC(earlier.getFullYear(), earlier.getMonth(), earlier.getDate());
+    return Math.round((laterUtc - earlierUtc) / (1000 * 60 * 60 * 24));
+}
+
+function getTodayStart() {
+    let today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
 // ===== CALCULAR LONGITUD PROMEDIO DEL CICLO =====
 function getAverageCycleLength(data) {
     let starts = getCycleStarts(data);
-    if (starts.length < 2) return DEFAULT_CYCLE_LENGTH;
+    if (starts.length < 2) return Number(cycleSettings.cycleLength) || DEFAULT_CYCLE_LENGTH;
     let diffs = [];
     for (let i = 1; i < starts.length; i++) {
-        diffs.push((starts[i].date - starts[i - 1].date) / (1000 * 60 * 60 * 24));
+        diffs.push(calendarDaysBetween(starts[i].date, starts[i - 1].date));
     }
     return Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length);
 }
@@ -210,9 +225,8 @@ function getCyclePhase(data) {
     if (starts.length === 0) return null;
 
     let lastStart = starts[starts.length - 1].date;
-    let today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let diff = Math.floor((today - lastStart) / (1000 * 60 * 60 * 24));
+    let today = getTodayStart();
+    let diff = calendarDaysBetween(today, lastStart);
     let cycleLen = getAverageCycleLength(data);
 
     if (diff < 0) return null;
@@ -286,9 +300,8 @@ function renderCountdown(data) {
         return;
     }
 
-    let today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let diff = Math.ceil((prediction - today) / (1000 * 60 * 60 * 24));
+    let today = getTodayStart();
+    let diff = calendarDaysBetween(prediction, today);
 
     if (countdownNumber) countdownNumber.textContent = diff > 0 ? diff : "Hoy";
     if (countdownDate) {
@@ -341,7 +354,7 @@ function renderHistory() {
         let realIdx = starts.length - 1 - idx;
         let cycleNum = realIdx + 1;
         if (realIdx < starts.length - 1) {
-            let days = Math.round((starts[realIdx + 1].date - s.date) / (1000 * 60 * 60 * 24));
+            let days = calendarDaysBetween(starts[realIdx + 1].date, s.date);
             return `
                 <li class="history-item">
                     <div class="history-item-header">
@@ -469,9 +482,8 @@ function checkNotificationAlert(data) {
     let prediction = predictNextCycle(data);
     if (!prediction) return;
 
-    let today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let diff = Math.ceil((prediction - today) / (1000 * 60 * 60 * 24));
+    let today = getTodayStart();
+    let diff = calendarDaysBetween(prediction, today);
     let threshold = cycleSettings.advanceDays || NOTIFICATION_THRESHOLD_DAYS;
 
     let todayKey = today.toDateString();
@@ -522,9 +534,8 @@ function renderAlerts(data) {
     }
 
     if (prediction) {
-        let today = new Date();
-        today.setHours(0, 0, 0, 0);
-        let diff = Math.ceil((prediction - today) / (1000 * 60 * 60 * 24));
+        let today = getTodayStart();
+        let diff = calendarDaysBetween(prediction, today);
 
         if (diff > 0 && diff <= cycleSettings.advanceDays) {
             list.innerHTML += `<li class="alert-warn">🩸 Tu periodo podría empezar en ${diff} día(s). ¡Prepárate!</li>`;
@@ -558,7 +569,7 @@ function renderSummary(data) {
 
     let durations = [];
     for (let i = 1; i < starts.length; i++) {
-        durations.push((starts[i].date - starts[i - 1].date) / (1000 * 60 * 60 * 24));
+        durations.push(calendarDaysBetween(starts[i].date, starts[i - 1].date));
     }
 
     let avg = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
@@ -1166,14 +1177,117 @@ if (nextBtn) {
     };
 }
 
+// ===== ORDEN DEL DASHBOARD =====
+const layoutStorageKey = "tititoDashboardOrder";
+const defaultCardOrder = ["voice", "cycle", "register", "calendar", "alerts", "phase", "summary", "history"];
+let draggedCard = null;
+let touchDragTimer = null;
+
+function saveDashboardOrder(grid) {
+    let order = [...grid.querySelectorAll("[data-card-id]")].map(card => card.dataset.cardId);
+    localStorage.setItem(layoutStorageKey, JSON.stringify(order));
+}
+
+function applyDashboardOrder(grid) {
+    let savedOrder;
+    try { savedOrder = JSON.parse(localStorage.getItem(layoutStorageKey) || "null"); } catch { savedOrder = null; }
+    let order = Array.isArray(savedOrder) ? savedOrder : defaultCardOrder;
+    let cards = [...grid.querySelectorAll("[data-card-id]")];
+    let orderedCards = order.map(id => cards.find(card => card.dataset.cardId === id)).filter(Boolean);
+    cards.filter(card => !orderedCards.includes(card)).forEach(card => orderedCards.push(card));
+    orderedCards.forEach((card, index) => { card.style.order = index; });
+}
+
+function setupDashboardLayout() {
+    let grid = document.querySelector(".bento-grid");
+    if (!grid) return;
+    let cards = [...grid.querySelectorAll("[data-card-id]")];
+    applyDashboardOrder(grid);
+
+    cards.forEach(card => {
+        card.draggable = true;
+        let grip = document.createElement("button");
+        grip.type = "button";
+        grip.className = "card-grip";
+        grip.textContent = "⋮⋮";
+        grip.title = "Arrastrar tarjeta";
+        grip.setAttribute("aria-label", `Mover tarjeta ${card.dataset.cardId}`);
+        card.prepend(grip);
+
+        card.addEventListener("dragstart", event => {
+            draggedCard = card;
+            card.classList.add("is-dragging");
+            event.dataTransfer.effectAllowed = "move";
+        });
+        card.addEventListener("dragover", event => {
+            event.preventDefault();
+            if (draggedCard && draggedCard !== card) {
+                let rect = card.getBoundingClientRect();
+                let insertBefore = event.clientY < rect.top + rect.height / 2;
+                grid.insertBefore(draggedCard, insertBefore ? card : card.nextSibling);
+            }
+        });
+        card.addEventListener("dragend", () => {
+            card.classList.remove("is-dragging");
+            draggedCard = null;
+            saveDashboardOrder(grid);
+        });
+
+        grip.addEventListener("pointerdown", event => {
+            if (event.pointerType === "mouse") return;
+            event.preventDefault();
+            touchDragTimer = setTimeout(() => {
+                draggedCard = card;
+                card.classList.add("is-dragging");
+                grip.setPointerCapture(event.pointerId);
+            }, 350);
+        });
+        grip.addEventListener("pointermove", event => {
+            if (draggedCard !== card) return;
+            let target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-card-id]");
+            if (!target || target === card || !grid.contains(target)) return;
+            let rect = target.getBoundingClientRect();
+            grid.insertBefore(card, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+        });
+        grip.addEventListener("pointerup", () => {
+            clearTimeout(touchDragTimer);
+            if (draggedCard === card) {
+                card.classList.remove("is-dragging");
+                draggedCard = null;
+                saveDashboardOrder(grid);
+            }
+        });
+        grip.addEventListener("pointercancel", () => {
+            clearTimeout(touchDragTimer);
+            card.classList.remove("is-dragging");
+            draggedCard = null;
+        });
+    });
+}
+
+const resetLayoutBtn = document.getElementById("resetLayoutBtn");
+if (resetLayoutBtn) {
+    resetLayoutBtn.onclick = () => {
+        localStorage.removeItem(layoutStorageKey);
+        let grid = document.querySelector(".bento-grid");
+        if (grid) applyDashboardOrder(grid);
+        showToast("Diseño original restaurado");
+    };
+}
+
 // ===== RENDERIZAR TODO =====
 function renderAll() {
+    let data = getData();
     renderCalendar();
     renderHistory();
-    renderCountdown(getData());
+    renderPhase(data);
+    renderAlerts(data);
+    renderSummary(data);
+    renderCountdown(data);
 }
 
 // ===== INIT =====
+setupDashboardLayout();
 if ("Notification" in window) {
     requestNotificationPermission();
 }
