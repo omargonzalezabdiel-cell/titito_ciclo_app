@@ -145,6 +145,9 @@ function buildCycleContextString(cycleContext) {
     let parts = [];
     parts.push(`Estado actual del ciclo: fase ${cycleContext.currentPhase}, día ${cycleContext.cycleDay} del ciclo.`);
     parts.push(`Duración promedio del ciclo: ${cycleContext.averageCycleLength} días.`);
+    if (cycleContext.irregularCycle) {
+        parts.push(`El patrón parece irregular: variación aproximada de ${cycleContext.cycleVariation || 0} días entre ciclos.`);
+    }
     parts.push(`Total de ciclos registrados: ${cycleContext.totalCycles}.`);
 
     if (cycleContext.daysUntilNext !== null && cycleContext.daysUntilNext !== undefined) {
@@ -174,7 +177,11 @@ app.post(["/chat", "/api/chat"], async (req, res) => {
 
         let contextStr = buildCycleContextString(cycleContext);
 
-        const systemContent = `Eres el Dr. Latigo, un médico especialista en salud femenina y bienestar altamente empático, amable y cercano. Respondes de forma clara, directa y tranquilizadora a dudas sobre el ciclo menstrual, síntomas, nutrición y descanso. No sustituyes una consulta médica y recomiendas atención profesional ante síntomas intensos o preocupantes.\n\nContexto actual del ciclo de la usuaria:\n${contextStr}\n\nSé breve, cálido y personalizado (2-4 frases).`;
+        const systemContent = `Eres el Dr. Latigo, un médico especialista en salud femenina y bienestar altamente empático, amable y cercano. Respondes de forma clara, directa y tranquilizadora a dudas sobre el ciclo menstrual, síntomas, nutrición y descanso. No sustituyes una consulta médica y recomiendas atención profesional ante síntomas intensos o preocupantes.
+
+Sobre ciclos irregulares: se considera irregular un ciclo menor de 21 días, mayor de 35 días o con variaciones superiores a 7-9 días. Puede relacionarse con estrés, cambios de peso o dieta, SOP, tiroides, falta de sueño, anticonceptivos recientes o ejercicio extremo. También puede haber manchado entre periodos, ausencia temporal del flujo, cambios de humor o dolor pélvico variable. Sugiere registrar síntomas y consultar si persiste más de 3 meses, hay dolor intenso, sangrado abundante, desmayo o posible embarazo.
+
+Contexto actual del ciclo de la usuaria:\n${contextStr}\n\nSé breve, cálido y personalizado (2-4 frases).`;
 
         let apiMessages = [
             { role: "system", content: systemContent },

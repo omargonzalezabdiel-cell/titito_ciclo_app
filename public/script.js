@@ -43,6 +43,7 @@ const phaseDetail = document.getElementById("phaseDetail");
 const phaseProgressFill = document.getElementById("phaseProgressFill");
 const phaseDayInfo = document.getElementById("phaseDayInfo");
 const notifToggle = document.getElementById("notifToggle");
+const notificationActionBtn = document.getElementById("notificationActionBtn");
 const historyToggle = document.getElementById("historyToggle");
 const historyContent = document.getElementById("historyContent");
 const historyList = document.getElementById("historyList");
@@ -70,6 +71,8 @@ let notificationsEnabled = false;
 let moodNotificationTimers = [];
 let proactiveNotificationTimer = null;
 let proactiveToastTimer = null;
+let serviceWorkerRegistration = null;
+let selectedSpeechVoice = null;
 let cycleSettings = JSON.parse(localStorage.getItem("cycleSettings")) || {
     notifications: false,
     advanceDays: NOTIFICATION_THRESHOLD_DAYS,
@@ -405,6 +408,11 @@ function requestNotificationPermission() {
 
     if (Notification.permission === "granted") {
         notificationsEnabled = true;
+        cycleSettings.notifications = true;
+        localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
+        if (notifToggle) notifToggle.checked = true;
+        if (notificationActionBtn) { notificationActionBtn.classList.add("is-enabled"); notificationActionBtn.querySelector("span").textContent = "Notificaciones activadas"; }
+        startProactiveNotifications();
         return true;
     }
 
@@ -414,6 +422,8 @@ function requestNotificationPermission() {
             cycleSettings.notifications = true;
             localStorage.setItem("cycleSettings", JSON.stringify(cycleSettings));
             showToast("Notificaciones activadas");
+            if (notificationActionBtn) { notificationActionBtn.classList.add("is-enabled"); notificationActionBtn.querySelector("span").textContent = "Notificaciones activadas"; }
+            sendNotification("Titito Ciclo", "¡Notificaciones activadas! El Dr. Latigo te acompañará día a día.");
             sendProactiveReminder();
             startProactiveNotifications();
         } else {
@@ -428,10 +438,15 @@ function requestNotificationPermission() {
 
 function sendNotification(title, body) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
+    let options = { body, tag: "cycle-alert", icon: "/icon-app.png", badge: "/logo.png" };
+    if (serviceWorkerRegistration) {
+        void serviceWorkerRegistration.showNotification(title, options).catch(() => new Notification(title, options));
+        return;
+    }
     try {
-        new Notification(title, { body, tag: "cycle-alert", icon: "/icon-app.png", badge: "/logo.png" });
-    } catch (e) {
-        console.warn("Notification error:", e);
+        new Notification(title, options);
+    } catch (error) {
+        console.warn("Notification error:", error.message);
     }
 }
 
@@ -501,8 +516,9 @@ function checkNotificationAlert(data) {
 }
 
 // ===== TOGGLE NOTIFICACIONES =====
+if (notificationActionBtn) notificationActionBtn.onclick = () => requestNotificationPermission();
 if (notifToggle) {
-    notifToggle.checked = cycleSettings.notifications;
+    notifToggle.checked = cycleSettings.notifications && "Notification" in window && Notification.permission === "granted";
     notifToggle.onchange = () => {
         if (notifToggle.checked) {
             requestNotificationPermission();
@@ -592,6 +608,11 @@ function getCycleContext() {
     let prediction = predictNextCycle(data);
     let phase = getCyclePhase(data);
     let avgLen = getAverageCycleLength(data);
+    let cycleLengths = [];
+    for (let index = 1; index < starts.length; index += 1) {
+        cycleLengths.push(calendarDaysBetween(starts[index].date, starts[index - 1].date));
+    }
+    let variation = cycleLengths.length > 1 ? Math.max(...cycleLengths) - Math.min(...cycleLengths) : 0;
 
     return {
         totalCycles: starts.length,
@@ -599,7 +620,9 @@ function getCycleContext() {
         currentPhase: phase ? phase.name : "desconocida",
         cycleDay: phase ? phase.cycleDay : null,
         nextPeriodDate: prediction ? prediction.toLocaleDateString("es-ES") : null,
-        daysUntilNext: prediction ? Math.ceil((prediction - new Date()) / (1000 * 60 * 60 * 24)) : null,
+        daysUntilNext: prediction ? calendarDaysBetween(prediction, getTodayStart()) : null,
+        cycleVariation: variation,
+        irregularCycle: avgLen < 21 || avgLen > 35 || variation > 7,
         recentIntensities: starts.slice(-3).map(s => s.intensity),
         lastNotes: starts.length > 0 ? starts[starts.length - 1].notes : null
     };
@@ -966,13 +989,27 @@ function addVoiceBubble(text, role) {
     voiceTranscript.scrollTop = voiceTranscript.scrollHeight;
 }
 
+function findMaleSpanishVoice() {
+    if (!("speechSynthesis" in window)) return null;
+    let voices = window.speechSynthesis.getVoices();
+    let spanishVoices = voices.filter(voice => /^es([-_]|$)/i.test(voice.lang));
+    let maleKeywords = /(jorge|pablo|raul|raúl|diego|tomas|tomás|david|carlos|miguel|male|masculin|standard-b)/i;
+    return spanishVoices.find(voice => maleKeywords.test(voice.name)) || spanishVoices.find(voice => /es-ES|es-MX/i.test(voice.lang)) || null;
+}
+
+function refreshSpeechVoice() {
+    selectedSpeechVoice = findMaleSpanishVoice();
+}
+
 function speakDoctor(text) {
     if (isVoiceMuted || !("speechSynthesis" in window)) return;
+    refreshSpeechVoice();
     window.speechSynthesis.cancel();
     let utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
-    utterance.rate = voiceRate ? Number(voiceRate.value) : 1;
-    utterance.pitch = 1.02;
+    if (selectedSpeechVoice) utterance.voice = selectedSpeechVoice;
+    utterance.rate = voiceRate ? Number(voiceRate.value) : 0.95;
+    utterance.pitch = selectedSpeechVoice ? 0.9 : 0.85;
     utterance.onstart = () => voiceWave && voiceWave.classList.add("active");
     utterance.onend = () => voiceWave && voiceWave.classList.remove("active");
     window.speechSynthesis.speak(utterance);
@@ -995,7 +1032,14 @@ function getLocalDoctorReply(message) {
     if (/(cansad|fatiga|agotad|sueño|sueno)/i.test(normalizedMessage)) {
         return "Tu cuerpo merece una pausa. Toma agua, come algo suave si lo necesitas y busca un momento de descanso sin exigirte de más.";
     }
-    if (/(ciclo|periodo|regla|ovul|fértil|fertil|retraso)/i.test(normalizedMessage)) {
+    if (/(irregular|retraso|no me baja|se me adelantó|se me atraso|se me atrasó|período loco|periodo loco)/i.test(normalizedMessage)) {
+        let context = getCycleContext();
+        if (context.irregularCycle) {
+            return `Entiendo tu preocupación, Yosseling. Tus registros muestran variaciones de ${context.cycleVariation} días; conviene orientarnos por tu promedio de ${context.averageCycleLength} días y no asumir un ciclo fijo de 28. Anota síntomas, descanso y estrés, y consulta con tu ginecóloga si dura más de 3 meses o aparece dolor intenso, sangrado abundante o desmayo.`;
+        }
+        return "Entiendo tu preocupación, Yosseling. Un retraso puntual puede relacionarse con estrés o cambios en tu rutina. Registra tus fechas y síntomas; si la irregularidad persiste más de 3 meses, hay dolor intenso, sangrado abundante o posibilidad de embarazo, consulta con tu ginecóloga.";
+    }
+    if (/(ciclo|periodo|regla|ovul|fértil|fertil)/i.test(normalizedMessage)) {
         let phase = getCycleContext();
         return phase.currentPhase === "desconocida"
             ? "Puedo orientarte mejor si registras el inicio de tu último periodo. Así estimamos tu fase y la próxima fecha, aunque una predicción nunca sustituye una prueba o una consulta médica."
@@ -1156,6 +1200,10 @@ if (muteBtn) muteBtn.onclick = () => {
 if (voiceSettingsBtn && voiceSettings) voiceSettingsBtn.onclick = () => {
     voiceSettings.hidden = !voiceSettings.hidden;
 };
+if ("speechSynthesis" in window) {
+    refreshSpeechVoice();
+    window.speechSynthesis.onvoiceschanged = refreshSpeechVoice;
+}
 if (voiceRate) voiceRate.oninput = () => {
     if (voiceRateValue) voiceRateValue.value = Number(voiceRate.value).toFixed(1);
 };
@@ -1288,13 +1336,19 @@ function renderAll() {
 
 // ===== INIT =====
 setupDashboardLayout();
-if ("Notification" in window) {
-    requestNotificationPermission();
+if ("serviceWorker" in navigator) {
+    void navigator.serviceWorker.register("/sw.js").then(registration => {
+        serviceWorkerRegistration = registration;
+        if ("periodicSync" in registration) {
+            void registration.periodicSync.register("titito-proactive-reminder", { minInterval: 30 * 60 * 1000 }).catch(() => {});
+        }
+    }).catch(error => console.warn("Service Worker unavailable:", error.message));
 }
 
 if (cycleSettings.notifications && "Notification" in window && Notification.permission === "granted") {
     notificationsEnabled = true;
     if (notifToggle) notifToggle.checked = true;
+    if (notificationActionBtn) { notificationActionBtn.classList.add("is-enabled"); notificationActionBtn.querySelector("span").textContent = "Notificaciones activadas"; }
     startProactiveNotifications();
 }
 
