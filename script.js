@@ -1010,8 +1010,8 @@ function speakDoctor(text) {
     if (selectedSpeechVoice) utterance.voice = selectedSpeechVoice;
     utterance.rate = voiceRate ? Number(voiceRate.value) : 0.95;
     utterance.pitch = selectedSpeechVoice ? 0.9 : 0.85;
-    utterance.onstart = () => voiceWave && voiceWave.classList.add("active");
-    utterance.onend = () => voiceWave && voiceWave.classList.remove("active");
+    utterance.onstart = () => voiceWave && voiceWave.classList.add("speaking");
+    utterance.onend = () => voiceWave && voiceWave.classList.remove("speaking");
     window.speechSynthesis.speak(utterance);
 }
 
@@ -1054,6 +1054,7 @@ function getLocalDoctorReply(message) {
 async function askDoctor(transcript) {
     let message = transcript.trim();
     if (!message) return;
+    if (voiceWave) voiceWave.classList.remove("active");
     addVoiceBubble(message, "user");
     voiceConversation.push({ role: "user", content: message });
     if (voiceStatus) voiceStatus.textContent = "Dr. Latigo está pensando...";
@@ -1100,7 +1101,7 @@ function stopListeningUi() {
         micBtn.classList.remove("listening");
         micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i><span>Hablar</span>';
     }
-    if (voiceWave) voiceWave.classList.remove("active");
+    if (voiceWave) { voiceWave.classList.remove("active"); voiceWave.classList.remove("speaking"); }
 }
 
 function stopListening() {
@@ -1125,7 +1126,7 @@ function createRecognitionSession(Recognition) {
             micBtn.classList.add("listening");
             micBtn.innerHTML = '<i class="fa-solid fa-stop"></i><span>Parar</span>';
         }
-        if (voiceWave) voiceWave.classList.add("active");
+        if (voiceWave) { voiceWave.classList.remove("speaking"); voiceWave.classList.add("active"); }
     };
     recognition.onresult = (event) => {
         let finalText = "";
@@ -1148,10 +1149,12 @@ function createRecognitionSession(Recognition) {
         if (voiceStatus) voiceStatus.textContent = "Sigo escuchando...";
     };
     recognition.onend = () => {
+        if (voiceWave && stopRequested) voiceWave.classList.remove("active");
         if (stopRequested) {
             stopListeningUi();
             return;
         }
+        if (voiceWave) voiceWave.classList.remove("active");
         if (recognitionRestartTimer) clearTimeout(recognitionRestartTimer);
         recognitionRestartTimer = setTimeout(() => {
             if (stopRequested || !recognition) return;
@@ -1193,6 +1196,7 @@ if (micBtn) micBtn.onclick = startListening;
 if (muteBtn) muteBtn.onclick = () => {
     isVoiceMuted = !isVoiceMuted;
     if (isVoiceMuted && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (isVoiceMuted && voiceWave) voiceWave.classList.remove("speaking");
     muteBtn.innerHTML = isVoiceMuted
         ? '<i class="fa-solid fa-volume-xmark"></i><span>Activar voz</span>'
         : '<i class="fa-solid fa-volume-high"></i><span>Silenciar voz</span>';
@@ -1243,7 +1247,7 @@ function applyDashboardOrder(grid) {
     let cards = [...grid.querySelectorAll("[data-card-id]")];
     let orderedCards = order.map(id => cards.find(card => card.dataset.cardId === id)).filter(Boolean);
     cards.filter(card => !orderedCards.includes(card)).forEach(card => orderedCards.push(card));
-    orderedCards.forEach((card, index) => { card.style.order = index; });
+    orderedCards.forEach(card => { card.style.order = ""; grid.appendChild(card); });
 }
 
 function setupDashboardLayout() {
