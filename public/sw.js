@@ -33,7 +33,7 @@ const MOTIVATIONAL_MESSAGES = [
     "🧘 Dr. Latigo: Antes de seguir con tu día, estira el cuello y los hombros. La tensión se acumula sin darse cuenta."
 ];
 
-const NOTIFICATION_TAG = "titito-ciclo-motivation";
+const NOTIFICATION_TAG = "titito-ciclo-alert";
 const MOTIVATIONAL_INTERVAL_MS = 30 * 60 * 1000;
 let motivationalTimerId = null;
 let lastSentMessage = null;
@@ -47,7 +47,7 @@ function buildNotificationOptions(body) {
         vibrate: [200, 100, 200],
         tag: NOTIFICATION_TAG,
         renotify: true,
-        requireInteraction: false,
+        requireInteraction: true,
         data: { timestamp: Date.now() }
     };
 }

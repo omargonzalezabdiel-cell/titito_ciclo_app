@@ -591,22 +591,57 @@ function requestNotificationPermission() {
         return false;
     }
 
-    if (Notification.permission === "granted") {
-        enableNotifications();
-        sendTestNotification();
-        return true;
-    }
-
     if (Notification.permission === "denied") {
         showDeniedBanner();
         showToast("Las notificaciones están bloqueadas. Revisa los permisos de tu navegador.");
         return false;
     }
 
+    const proceed = () => {
+        enableNotifications();
+        if (!("serviceWorker" in navigator)) {
+            showToast("Tu navegador no soporta notificaciones en segundo plano");
+            return;
+        }
+        navigator.serviceWorker.register("/sw.js").then(reg => {
+            serviceWorkerRegistration = reg;
+            if ("periodicSync" in reg) {
+                void reg.periodicSync.register("titito-proactive-reminder", { minInterval: 30 * 60 * 1000 }).catch(() => {});
+            }
+            navigator.serviceWorker.ready.then(readyReg => {
+                const title = "Titito Ciclo · Dr. Latigo";
+                const body = "¡Notificaciones activadas! Ya recibirás mis mensajes cada 30 minutos en tu celular.";
+                const options = {
+                    body,
+                    icon: "/icon-app.png",
+                    badge: "/logo.png",
+                    vibrate: [200, 100, 200],
+                    tag: "titito-ciclo-alert",
+                    renotify: true,
+                    requireInteraction: true,
+                    data: { timestamp: Date.now() }
+                };
+                void readyReg.showNotification(title, options).then(() => {
+                    showToast("Notificación enviada: minimiza la app para verla en la barra de tu celular");
+                }).catch(err => {
+                    console.warn("Test notification failed:", err.message);
+                    showToast("No se pudo enviar la notificación de prueba");
+                });
+            });
+        }).catch(err => {
+            console.warn("SW registration failed:", err.message);
+            showToast("No se pudo registrar el Service Worker");
+        });
+    };
+
+    if (Notification.permission === "granted") {
+        proceed();
+        return true;
+    }
+
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-            enableNotifications();
-            sendTestNotification();
+            proceed();
         } else {
             notificationsEnabled = false;
             cycleSettings.notifications = false;
@@ -634,11 +669,31 @@ function enableNotifications() {
 function sendTestNotification() {
     let title = "Titito Ciclo · Dr. Latigo";
     let body = "¡Notificaciones activadas! Ya recibirás mis mensajes cada 30 minutos en tu celular.";
-    if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
-        serviceWorkerRegistration.active.postMessage({ type: "SHOW_NOTIFICATION", title, body });
-    } else {
-        sendNotification(title, body);
+    if (!("serviceWorker" in navigator)) {
+        showToast("Tu navegador no soporta notificaciones en segundo plano");
+        return;
     }
+    navigator.serviceWorker.ready.then(reg => {
+        const options = {
+            body,
+            icon: "/icon-app.png",
+            badge: "/logo.png",
+            vibrate: [200, 100, 200],
+            tag: "titito-ciclo-alert",
+            renotify: true,
+            requireInteraction: true,
+            data: { timestamp: Date.now() }
+        };
+        void reg.showNotification(title, options).then(() => {
+            showToast("Notificación enviada: minimiza la app para verla en la barra de tu celular");
+        }).catch(err => {
+            console.warn("Test notification failed:", err.message);
+            showToast("No se pudo enviar la notificación de prueba");
+        });
+    }).catch(err => {
+        console.warn("SW not ready for test:", err.message);
+        showToast("El Service Worker no está listo aún");
+    });
 }
 
 function showDeniedBanner() {
@@ -651,18 +706,20 @@ function hideDeniedBanner() {
 
 function sendNotification(title, body) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
-    let options = { body, tag: "titito-ciclo-motivation", icon: "/icon-app.png", badge: "/logo.png", vibrate: [200, 100, 200], renotify: true };
-    if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
-        void serviceWorkerRegistration.showNotification(title, options).catch(() => {
-            try { new Notification(title, options); } catch (e) { console.warn("Notification fallback failed:", e.message); }
-        });
-        return;
-    }
-    try {
-        new Notification(title, options);
-    } catch (error) {
-        console.warn("Notification error:", error.message);
-    }
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready.then(reg => {
+        const options = {
+            body,
+            icon: "/icon-app.png",
+            badge: "/logo.png",
+            vibrate: [200, 100, 200],
+            tag: "titito-ciclo-alert",
+            renotify: true,
+            requireInteraction: true,
+            data: { timestamp: Date.now() }
+        };
+        void reg.showNotification(title, options).catch(err => console.warn("SW showNotification failed:", err.message));
+    }).catch(err => console.warn("SW not ready:", err.message));
 }
 
 function getRecentMessageHistory() {
@@ -714,6 +771,10 @@ function startProactiveNotifications() {
     if (!notificationsEnabled) return;
     if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
         serviceWorkerRegistration.active.postMessage({ type: "START_MOTIVATIONAL_TIMER" });
+    } else if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+            if (reg.active) reg.active.postMessage({ type: "START_MOTIVATIONAL_TIMER" });
+        }).catch(() => {});
     }
     proactiveNotificationTimer = setInterval(sendProactiveReminder, 30 * 60 * 1000);
 }
@@ -1728,6 +1789,11 @@ if ("serviceWorker" in navigator) {
         serviceWorkerRegistration = registration;
         if ("periodicSync" in registration) {
             void registration.periodicSync.register("titito-proactive-reminder", { minInterval: 30 * 60 * 1000 }).catch(() => {});
+        }
+        if (cycleSettings.notifications && "Notification" in window && Notification.permission === "granted") {
+            navigator.serviceWorker.ready.then(readyReg => {
+                if (readyReg.active) readyReg.active.postMessage({ type: "START_MOTIVATIONAL_TIMER" });
+            }).catch(() => {});
         }
     }).catch(error => console.warn("Service Worker unavailable:", error.message));
 }
