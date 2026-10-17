@@ -23,6 +23,7 @@ const micBtn = document.getElementById("micBtn");
 const muteBtn = document.getElementById("muteBtn");
 const voiceSettingsBtn = document.getElementById("voiceSettingsBtn");
 const voiceSettings = document.getElementById("voiceSettings");
+const briefingBtn = document.getElementById("briefingBtn");
 const voiceRate = document.getElementById("voiceRate");
 const voiceRateValue = document.getElementById("voiceRateValue");
 const voiceLanguage = document.getElementById("voiceLanguage");
@@ -1397,7 +1398,7 @@ function refreshSpeechVoice() {
     selectedSpeechVoice = findMaleSpanishVoice();
 }
 
-function speakDoctor(text) {
+function speakDoctor(text, opts = {}) {
     if (isVoiceMuted || !("speechSynthesis" in window)) return;
     refreshSpeechVoice();
     window.speechSynthesis.cancel();
@@ -1405,16 +1406,189 @@ function speakDoctor(text) {
     utterance.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
     if (selectedSpeechVoice) utterance.voice = selectedSpeechVoice;
     let isNativeMale = selectedSpeechVoice && /(jorge|pablo|raul|raúl|diego|tomas|tomás|david|carlos|miguel|male|masculin|standard-b)/i.test(selectedSpeechVoice.name);
-    if (isNativeMale) {
-        utterance.rate = voiceRate ? Number(voiceRate.value) : 0.95;
+    if (opts.pitch !== undefined) {
+        utterance.pitch = opts.pitch;
+    } else if (isNativeMale) {
         utterance.pitch = 0.9;
     } else {
-        utterance.rate = voiceRate ? Math.min(Number(voiceRate.value), 0.92) : 0.92;
         utterance.pitch = 0.72;
+    }
+    if (opts.rate !== undefined) {
+        utterance.rate = opts.rate;
+    } else {
+        let baseRate = voiceRate ? Number(voiceRate.value) : 0.95;
+        utterance.rate = isNativeMale ? baseRate : Math.min(baseRate, 0.92);
     }
     utterance.onstart = () => voiceWave && voiceWave.classList.add("speaking");
     utterance.onend = () => voiceWave && voiceWave.classList.remove("speaking");
     window.speechSynthesis.speak(utterance);
+}
+
+function getDynamicVoiceParams() {
+    let data = getData();
+    let phase = getCyclePhase(data);
+    let phaseName = phase ? phase.name : "";
+    let moodState = "neutral";
+    try { moodState = JSON.parse(localStorage.getItem("todayMoodState") || '{"mood":"neutral"}').mood || "neutral"; } catch {}
+    if (/(triste|deprimid|mal|ansios)/i.test(moodState) || /dolor fuerte|intensidad.*fuerte/i.test(moodState)) {
+        return { pitch: 0.78, rate: 0.88 };
+    }
+    if (phaseName.includes("Folicular") || phaseName.includes("Ovulación") || /bien|energía|energia|feliz|positiv/i.test(moodState)) {
+        return { pitch: 0.85, rate: 0.95 };
+    }
+    return {};
+}
+
+// ===== COMANDOS DE VOZ MANOS LIBRES =====
+function getTodayDateKey() {
+    let today = getTodayStart();
+    return `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+}
+
+function voiceCommandAddSymptom(transcript) {
+    let match = transcript.match(/(?:anota|tengo|me siento|siento|estoy|me duele|me duelen)\s+(.+)/i);
+    if (!match) return false;
+    let symptom = match[1].trim();
+    let dateKey = getTodayDateKey();
+    let data = getData();
+    if (!data[dateKey]) {
+        data[dateKey] = { menstruation: false, intensity: currentIntensity, notes: "" };
+    }
+    let existingNotes = data[dateKey].notes ? data[dateKey].notes.trim() : "";
+    data[dateKey].notes = existingNotes ? `${existingNotes}; ${symptom}` : symptom;
+    saveData(data);
+    if (notesArea) notesArea.value = data[dateKey].notes;
+    renderAll();
+    return true;
+}
+
+function voiceCommandAddWater(transcript) {
+    if (!/tome?\s+.*vaso\s+de\s+agua|tomé?\s+.*vaso\s+de\s+agua|suma\s+agua|ya\s+tomé?\s+agua|ya\s+tome\s+agua|bebí?\s+agua|bebi\s+agua/i.test(transcript)) return false;
+    if (waterIntake < waterGoal + 4) {
+        waterIntake++;
+        saveWaterIntake();
+        renderWaterTracker();
+        checkHydrationReminder();
+    }
+    return true;
+}
+
+function voiceCommandStartPeriod(transcript) {
+    if (!/inició?\s+mi\s+periodo|inicio\s+mi\s+periodo|me\s+bajó|me\s+bajo|hoy\s+me\s+bajó|empezó?\s+mi\s+periodo|empezo\s+mi\s+periodo/i.test(transcript)) return false;
+    let dateKey = getTodayDateKey();
+    let data = getData();
+    if (!data[dateKey]) {
+        data[dateKey] = { menstruation: true, intensity: currentIntensity, notes: "Inicio de periodo registrado por voz" };
+    } else {
+        data[dateKey].menstruation = true;
+        if (!data[dateKey].notes) data[dateKey].notes = "Inicio de periodo registrado por voz";
+    }
+    saveData(data);
+    selectedDateKey = dateKey;
+    renderAll();
+    checkNotificationAlert(data);
+    return true;
+}
+
+function tryVoiceCommand(transcript) {
+    let normalized = transcript.toLowerCase().trim();
+    if (voiceCommandStartPeriod(normalized)) {
+        return "He registrado el inicio de tu periodo hoy en el calendario. Recuerda descansar, hidratarte y tomar agua. Si el dolor es fuerte, no dudes en buscar ayuda médica.";
+    }
+    if (voiceCommandAddWater(normalized)) {
+        let remaining = waterGoal - waterIntake;
+        if (remaining > 0) {
+            return `He sumado un vaso de agua a tu contador. Vas ${waterIntake} de ${waterGoal} vasos. Te faltan ${remaining} para tu meta de hoy.`;
+        }
+        return `He sumado un vaso de agua. ¡Felicidades, has alcanzado tu meta de ${waterGoal} vasos hoy! Tu cuerpo te lo agradece.`;
+    }
+    if (voiceCommandAddSymptom(normalized)) {
+        return "He anotado eso en tu Check-in de hoy. Gracias por compartirlo conmigo. ¿Quieres que te dé algún consejo para aliviarlo?";
+    }
+    return null;
+}
+
+// ===== RESUMEN DIARIO HABLADO =====
+function buildDailyBriefing() {
+    let data = getData();
+    let phase = getCyclePhase(data);
+    let predictions = getActiveSymptomPredictions(data);
+    let remaining = waterGoal - waterIntake;
+    let parts = [];
+
+    if (phase) {
+        parts.push(`Hola Yosseling. Hoy estás en la fase ${phase.name}, ${phase.desc.toLowerCase()}. ${phase.dayInfo}.`);
+    } else {
+        parts.push("Hola Yosseling. Aún no tienes un ciclo registrado, pero estoy aquí para acompañarte.");
+    }
+
+    if (predictions.length > 0) {
+        let top = predictions[0];
+        let dayWord = top.daysUntil === 1 ? "mañana" : `en ${top.daysUntil} días`;
+        parts.push(`Según tu historial, ${dayWord} sueles presentar ${top.symptom}. Te recomiendo descansar e hidratarte bien como prevención.`);
+    }
+
+    if (remaining > 0) {
+        parts.push(`Llevas ${waterIntake} de ${waterGoal} vasos de agua hoy. Te faltan ${remaining} para tu meta.`);
+    } else if (waterIntake > 0) {
+        parts.push(`¡Felicidades! Has alcanzado tu meta de ${waterGoal} vasos de agua hoy.`);
+    }
+
+    parts.push("Recuerda escucharte con cariño. Cada síntoma es información valiosa para conocerte mejor. Estoy aquí contigo.");
+    return parts.join(" ");
+}
+
+function playDailyBriefing() {
+    let briefing = buildDailyBriefing();
+    if (voiceStatus) voiceStatus.textContent = "Resumen del día en curso...";
+    if (doctorGreeting) doctorGreeting.textContent = "Aquí tienes tu resumen del día...";
+    addVoiceBubble(briefing, "assistant");
+    voiceConversation.push({ role: "assistant", content: briefing });
+    let params = getDynamicVoiceParams();
+    speakDoctor(briefing, params);
+    if (voiceStatus) voiceStatus.textContent = "Listo · resumen del día";
+    if (doctorGreeting) doctorGreeting.textContent = "Puedes volver a hablar cuando quieras.";
+}
+
+if (briefingBtn) briefingBtn.onclick = playDailyBriefing;
+
+// ===== FEEDBACK HÁPTICO Y SONORO =====
+function playHapticFeedback() {
+    if ("vibrate" in navigator) {
+        try { navigator.vibrate(50); } catch (e) { console.debug("Vibrate failed", e.message); }
+    }
+}
+
+let audioFeedbackCtx = null;
+function playSoundFeedback(freq = 600, duration = 150) {
+    try {
+        if (!audioFeedbackCtx) audioFeedbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let ctx = audioFeedbackCtx;
+        if (ctx.state === "suspended") ctx.resume();
+        let osc = ctx.createOscillator();
+        let gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + duration / 1000);
+    } catch (e) {
+        console.debug("Audio feedback failed", e.message);
+    }
+}
+
+function playMicStartFeedback() {
+    playHapticFeedback();
+    playSoundFeedback(700, 120);
+}
+
+function playMicStopFeedback() {
+    playHapticFeedback();
+    playSoundFeedback(400, 120);
 }
 
 function getLocalDoctorReply(message) {
@@ -1482,6 +1656,17 @@ async function askDoctor(transcript) {
     if (voiceStatus) voiceStatus.textContent = "Dr. Latigo está pensando...";
     if (doctorGreeting) doctorGreeting.textContent = "Estoy revisando lo que me cuentas...";
 
+    let commandReply = tryVoiceCommand(message);
+    if (commandReply) {
+        let reply = commandReply;
+        voiceConversation.push({ role: "assistant", content: reply });
+        addVoiceBubble(reply, "assistant");
+        speakDoctor(reply, getDynamicVoiceParams());
+        if (voiceStatus) voiceStatus.textContent = "Listo · comando ejecutado";
+        if (doctorGreeting) doctorGreeting.textContent = "Puedes volver a hablar cuando quieras.";
+        return;
+    }
+
     let reply = getLocalDoctorReply(message);
     let provider = "respuesta local";
     if (API_URL) {
@@ -1512,7 +1697,7 @@ async function askDoctor(transcript) {
 
     voiceConversation.push({ role: "assistant", content: reply });
     addVoiceBubble(reply, "assistant");
-    speakDoctor(reply);
+    speakDoctor(reply, getDynamicVoiceParams());
     if (voiceStatus) voiceStatus.textContent = `Listo · ${provider}`;
     if (doctorGreeting) doctorGreeting.textContent = "Puedes volver a hablar cuando quieras.";
 }
@@ -1534,6 +1719,7 @@ function stopListening() {
         try { recognition.stop(); } catch (error) { console.debug("Recognition already stopped", error.message); }
     }
     stopListeningUi();
+    playMicStopFeedback();
     if (voiceStatus) voiceStatus.textContent = "Micrófono detenido";
 }
 
@@ -1631,6 +1817,7 @@ function startListening() {
         return;
     }
     stopRequested = false;
+    playMicStartFeedback();
     createRecognitionSession(Recognition);
 }
 
