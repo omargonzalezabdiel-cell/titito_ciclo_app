@@ -167,6 +167,18 @@ function buildCycleContextString(cycleContext) {
         parts.push(`Últimas notas de la usuaria: "${cycleContext.lastNotes}".`);
     }
 
+    if (cycleContext.recentLogs && cycleContext.recentLogs.length > 0) {
+        parts.push(`Registros recientes del calendario (últimos ${cycleContext.recentLogs.length}): ${cycleContext.recentLogs.join(" | ")}.`);
+    }
+
+    if (cycleContext.notesHistory && cycleContext.notesHistory.length > 0) {
+        parts.push(`Historial de notas por fecha: ${cycleContext.notesHistory.join(" | ")}.`);
+    }
+
+    if (cycleContext.cycleStartDates && cycleContext.cycleStartDates.length > 0) {
+        parts.push(`Fechas de inicio de menstruación registradas: ${cycleContext.cycleStartDates.join(", ")}.`);
+    }
+
     return parts.join(" ");
 }
 

@@ -62,6 +62,9 @@ let recognition = null;
 let isListening = false;
 let stopRequested = false;
 let recognitionRestartTimer = null;
+let silenceTimer = null;
+let accumulatedTranscript = "";
+const SILENCE_TIMEOUT_MS = 1800;
 let isVoiceMuted = false;
 let voiceConversation = [];
 let currentIntensity = 2;
@@ -614,6 +617,24 @@ function getCycleContext() {
     }
     let variation = cycleLengths.length > 1 ? Math.max(...cycleLengths) - Math.min(...cycleLengths) : 0;
 
+    let recentLogs = [];
+    let sortedKeys = Object.keys(data).sort();
+    let last30 = sortedKeys.slice(-30);
+    last30.forEach(dateKey => {
+        let entry = data[dateKey];
+        if (!entry) return;
+        let parts = [dateKey];
+        if (entry.menstruation) parts.push("menstruaci\u00f3n");
+        if (entry.intensity) parts.push("intensidad " + (entry.intensity === 1 ? "leve" : entry.intensity === 2 ? "media" : "fuerte"));
+        if (entry.notes && entry.notes.trim()) parts.push("notas: \"" + entry.notes.trim() + "\"");
+        if (parts.length > 1) recentLogs.push(parts.join(" - "));
+    });
+
+    let notesWithDates = [];
+    starts.forEach(s => {
+        if (s.notes && s.notes.trim()) notesWithDates.push(`${s.dateKey}: "${s.notes.trim()}"`);
+    });
+
     return {
         totalCycles: starts.length,
         averageCycleLength: avgLen,
@@ -624,7 +645,10 @@ function getCycleContext() {
         cycleVariation: variation,
         irregularCycle: avgLen < 21 || avgLen > 35 || variation > 7,
         recentIntensities: starts.slice(-3).map(s => s.intensity),
-        lastNotes: starts.length > 0 ? starts[starts.length - 1].notes : null
+        lastNotes: starts.length > 0 ? starts[starts.length - 1].notes : null,
+        recentLogs: recentLogs,
+        cycleStartDates: starts.map(s => s.dateKey),
+        notesHistory: notesWithDates.slice(-10)
     };
 }
 
@@ -993,7 +1017,7 @@ function findMaleSpanishVoice() {
     if (!("speechSynthesis" in window)) return null;
     let voices = window.speechSynthesis.getVoices();
     let spanishVoices = voices.filter(voice => /^es([-_]|$)/i.test(voice.lang));
-    let maleKeywords = /(jorge|pablo|raul|raúl|diego|tomas|tomás|david|carlos|miguel|male|masculin|standard-b)/i;
+    let maleKeywords = /(jorge|pablo|raul|raúl|diego|tomas|tomás|david|carlos|miguel|male|masculin|standard-b|es-ES-Standard-B|es-MX-Standard-B)/i;
     return spanishVoices.find(voice => maleKeywords.test(voice.name)) || spanishVoices.find(voice => /es-ES|es-MX/i.test(voice.lang)) || null;
 }
 
@@ -1008,8 +1032,14 @@ function speakDoctor(text) {
     let utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
     if (selectedSpeechVoice) utterance.voice = selectedSpeechVoice;
-    utterance.rate = voiceRate ? Number(voiceRate.value) : 0.95;
-    utterance.pitch = selectedSpeechVoice ? 0.9 : 0.85;
+    let isNativeMale = selectedSpeechVoice && /(jorge|pablo|raul|raúl|diego|tomas|tomás|david|carlos|miguel|male|masculin|standard-b)/i.test(selectedSpeechVoice.name);
+    if (isNativeMale) {
+        utterance.rate = voiceRate ? Number(voiceRate.value) : 0.95;
+        utterance.pitch = 0.9;
+    } else {
+        utterance.rate = voiceRate ? Math.min(Number(voiceRate.value), 0.92) : 0.92;
+        utterance.pitch = 0.72;
+    }
     utterance.onstart = () => voiceWave && voiceWave.classList.add("speaking");
     utterance.onend = () => voiceWave && voiceWave.classList.remove("speaking");
     window.speechSynthesis.speak(utterance);
@@ -1017,6 +1047,20 @@ function speakDoctor(text) {
 
 function getLocalDoctorReply(message) {
     let normalizedMessage = message.toLowerCase();
+    let context = getCycleContext();
+    if (/(cómo ha estado|como ha estado|mi ciclo este|este mes|mi mes|resumen|cómo va|como va)/i.test(normalizedMessage)) {
+        if (context.totalCycles === 0) return "Aún no tienes registros en tu calendario, Yosseling. Cuando anotes tu próximo periodo, podré darte un resumen personalizado de cómo va tu ciclo.";
+        let summary = `Según tus registros, llevas ${context.totalCycles} ciclo(s) con un promedio de ${context.averageCycleLength} días. Estás en fase ${context.currentPhase}`;
+        if (context.daysUntilNext !== null) summary += context.daysUntilNext > 0 ? ` y faltan ${context.daysUntilNext} días para tu próximo periodo.` : ` y tu periodo debería estar por llegar.`;
+        else summary += ".";
+        if (context.irregularCycle) summary += ` He notado variaciones de ${context.cycleVariation} días entre ciclos; vale la pena vigilarlo.`;
+        if (context.recentLogs && context.recentLogs.length > 0) summary += ` Tus últimos registros: ${context.recentLogs.slice(-5).join("; ")}.`;
+        return summary;
+    }
+    if (/(dolor de cabeza|me dolía|me dolia|martes|jueves|ayer|antier)/i.test(normalizedMessage) && context.recentLogs.length > 0) {
+        let matching = context.recentLogs.filter(log => /dolor|mareo|malestar|cansad|fatiga/i.test(log));
+        if (matching.length > 0) return `Según tus notas, registraste: ${matching.slice(-3).join("; ")}. Si el dolor de cabeza fue intenso o diferente a lo habitual, conviene hidratación, descanso y consultar si se repite con frecuencia.`;
+    }
     if (/(remedio|qué tomar|que tomar|aliviar|calmar|tratamiento)/i.test(normalizedMessage) && /(dolor|cólico|colico|periodo|regla)/i.test(normalizedMessage)) {
         return "Para molestias leves puedes probar calor local, descanso, hidratación y movimiento suave. No tomes medicamentos nuevos sin confirmar que son seguros para ti; si el dolor es intenso, repentino o no mejora, busca atención médica.";
     }
@@ -1106,6 +1150,7 @@ function stopListeningUi() {
 
 function stopListening() {
     stopRequested = true;
+    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
     if (recognitionRestartTimer) clearTimeout(recognitionRestartTimer);
     if (recognition) {
         try { recognition.stop(); } catch (error) { console.debug("Recognition already stopped", error.message); }
@@ -1118,7 +1163,8 @@ function createRecognitionSession(Recognition) {
     recognition = new Recognition();
     recognition.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
     recognition.interimResults = true;
-    recognition.continuous = true;
+    recognition.continuous = false;
+    accumulatedTranscript = "";
     recognition.onstart = () => {
         isListening = true;
         if (voiceStatus) voiceStatus.textContent = "Escuchando...";
@@ -1129,17 +1175,29 @@ function createRecognitionSession(Recognition) {
         if (voiceWave) { voiceWave.classList.remove("speaking"); voiceWave.classList.add("active"); }
     };
     recognition.onresult = (event) => {
-        let finalText = "";
         let interimText = "";
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
             let text = event.results[index][0].transcript;
-            if (event.results[index].isFinal) finalText += text;
-            else interimText += text;
+            if (event.results[index].isFinal) {
+                accumulatedTranscript += text + " ";
+            } else {
+                interimText += text;
+            }
         }
-        if (interimText && doctorGreeting) doctorGreeting.textContent = `Te escucho: ${interimText}`;
-        if (finalText.trim()) void askDoctor(finalText.trim());
+        let displayText = (accumulatedTranscript + interimText).trim();
+        if (displayText && doctorGreeting) doctorGreeting.textContent = `Te escucho: ${displayText}`;
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+            let finalText = (accumulatedTranscript + interimText).trim();
+            if (finalText) {
+                accumulatedTranscript = "";
+                try { recognition.stop(); } catch (e) { console.debug("Recognition stop on silence", e.message); }
+                void askDoctor(finalText);
+            }
+        }, SILENCE_TIMEOUT_MS);
     };
     recognition.onerror = (event) => {
+        if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
         if (event.error === "not-allowed" || event.error === "service-not-allowed") {
             stopRequested = true;
             stopListeningUi();
@@ -1149,12 +1207,18 @@ function createRecognitionSession(Recognition) {
         if (voiceStatus) voiceStatus.textContent = "Sigo escuchando...";
     };
     recognition.onend = () => {
-        if (voiceWave && stopRequested) voiceWave.classList.remove("active");
+        if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+        if (voiceWave) voiceWave.classList.remove("active");
         if (stopRequested) {
             stopListeningUi();
             return;
         }
-        if (voiceWave) voiceWave.classList.remove("active");
+        let pending = accumulatedTranscript.trim();
+        if (pending) {
+            accumulatedTranscript = "";
+            void askDoctor(pending);
+            return;
+        }
         if (recognitionRestartTimer) clearTimeout(recognitionRestartTimer);
         recognitionRestartTimer = setTimeout(() => {
             if (stopRequested || !recognition) return;
@@ -1167,7 +1231,7 @@ function createRecognitionSession(Recognition) {
                     }
                 }, 500);
             }
-        }, 180);
+        }, 300);
     };
     try {
         recognition.start();
