@@ -1398,11 +1398,25 @@ function refreshSpeechVoice() {
     selectedSpeechVoice = findMaleSpanishVoice();
 }
 
+// ===== SANITIZAR TEXTO PARA TTS =====
+function sanitizeForTTS(text) {
+    return text
+        .replace(/[*#\-_`>]/g, "")
+        .replace(/\n+/g, ". ")
+        .replace(/\s{2,}/g, " ")
+        .replace(/\s+([,\.])/g, "$1")
+        .replace(/([,])(?=\S)/g, ", ")
+        .replace(/([.])(?=\S)/g, ". ")
+        .replace(/\.\s*\./g, ".")
+        .replace(/^\s+|\s+$/g, "");
+}
+
 function speakDoctor(text, opts = {}) {
     if (isVoiceMuted || !("speechSynthesis" in window)) return;
     refreshSpeechVoice();
     window.speechSynthesis.cancel();
-    let utterance = new SpeechSynthesisUtterance(text);
+    let cleanText = sanitizeForTTS(text);
+    let utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = voiceLanguage ? voiceLanguage.value : "es-ES";
     if (selectedSpeechVoice) utterance.voice = selectedSpeechVoice;
     let isNativeMale = selectedSpeechVoice && /(jorge|pablo|raul|raúl|diego|tomas|tomás|david|carlos|miguel|male|masculin|standard-b)/i.test(selectedSpeechVoice.name);
@@ -1433,10 +1447,13 @@ function getDynamicVoiceParams() {
     if (/(triste|deprimid|mal|ansios)/i.test(moodState) || /dolor fuerte|intensidad.*fuerte/i.test(moodState)) {
         return { pitch: 0.78, rate: 0.88 };
     }
+    if (phaseName.includes("Menstruación") || phaseName.includes("Lútea")) {
+        return { pitch: 0.80, rate: 0.90 };
+    }
     if (phaseName.includes("Folicular") || phaseName.includes("Ovulación") || /bien|energía|energia|feliz|positiv/i.test(moodState)) {
         return { pitch: 0.85, rate: 0.95 };
     }
-    return {};
+    return { pitch: 0.83, rate: 0.94 };
 }
 
 // ===== COMANDOS DE VOZ MANOS LIBRES =====
@@ -1493,17 +1510,17 @@ function voiceCommandStartPeriod(transcript) {
 function tryVoiceCommand(transcript) {
     let normalized = transcript.toLowerCase().trim();
     if (voiceCommandStartPeriod(normalized)) {
-        return "He registrado el inicio de tu periodo hoy en el calendario. Recuerda descansar, hidratarte y tomar agua. Si el dolor es fuerte, no dudes en buscar ayuda médica.";
+        return "Listo, Yosseling, ya anoté el inicio de tu periodo en el calendario. Tranquila, es normal sentirse un poco sensible hoy. Recuerda descansar, tomar agua y aplicarte calor si lo necesitas. ¿Cómo te gustaría que te acompañe hoy?";
     }
     if (voiceCommandAddWater(normalized)) {
         let remaining = waterGoal - waterIntake;
         if (remaining > 0) {
-            return `He sumado un vaso de agua a tu contador. Vas ${waterIntake} de ${waterGoal} vasos. Te faltan ${remaining} para tu meta de hoy.`;
+            return `Perfecto, ya sumé un vaso de agua a tu contador. Vas ${waterIntake} de ${waterGoal} vasos, te faltan solo ${remaining} para llegar a tu meta. ¿Te gustaría que anotemos algo más?`;
         }
-        return `He sumado un vaso de agua. ¡Felicidades, has alcanzado tu meta de ${waterGoal} vasos hoy! Tu cuerpo te lo agradece.`;
+        return `¡Qué bueno, Yosseling! Con este vaso ya alcanzaste tu meta de ${waterGoal} vasos de agua hoy. Tu cuerpo te lo agradece de verdad. ¿Cómo te sientes después de hidratarte bien?`;
     }
     if (voiceCommandAddSymptom(normalized)) {
-        return "He anotado eso en tu Check-in de hoy. Gracias por compartirlo conmigo. ¿Quieres que te dé algún consejo para aliviarlo?";
+        return "Comprendo, Yosseling. Ya lo anoté en tu registro de hoy. Gracias por compartirlo conmigo, eso me ayuda a acompañarte mejor. ¿Quieres que platiquemos sobre cómo aliviarlo?";
     }
     return null;
 }
@@ -1517,24 +1534,24 @@ function buildDailyBriefing() {
     let parts = [];
 
     if (phase) {
-        parts.push(`Hola Yosseling. Hoy estás en la fase ${phase.name}, ${phase.desc.toLowerCase()}. ${phase.dayInfo}.`);
+        parts.push(`Hola, Yosseling. A ver, déjame revisar tu ciclo. Hoy estás en la fase ${phase.name}, que es de ${phase.desc.toLowerCase()}. ${phase.dayInfo}.`);
     } else {
-        parts.push("Hola Yosseling. Aún no tienes un ciclo registrado, pero estoy aquí para acompañarte.");
+        parts.push("Hola, Yosseling. Mira, aún no tienes un ciclo registrado, pero estoy aquí para acompañarte cuando quieras empezar.");
     }
 
     if (predictions.length > 0) {
         let top = predictions[0];
         let dayWord = top.daysUntil === 1 ? "mañana" : `en ${top.daysUntil} días`;
-        parts.push(`Según tu historial, ${dayWord} sueles presentar ${top.symptom}. Te recomiendo descansar e hidratarte bien como prevención.`);
+        parts.push(`Te cuento algo importante. Según tu historial, ${dayWord} sueles presentar ${top.symptom}. Así que te sugiero descansar bien e hidratarte hoy, como prevención. ¿Cómo te suena eso?`);
     }
 
     if (remaining > 0) {
-        parts.push(`Llevas ${waterIntake} de ${waterGoal} vasos de agua hoy. Te faltan ${remaining} para tu meta.`);
+        parts.push(`Sobre tu agua, llevas ${waterIntake} de ${waterGoal} vasos hoy. Te faltan ${remaining} para tu meta. ¿Te parece si te tomas uno ahora?`);
     } else if (waterIntake > 0) {
-        parts.push(`¡Felicidades! Has alcanzado tu meta de ${waterGoal} vasos de agua hoy.`);
+        parts.push(`Y muy bien por tu hidratación, ¡ya alcanzaste tu meta de ${waterGoal} vasos de agua hoy!`);
     }
 
-    parts.push("Recuerda escucharte con cariño. Cada síntoma es información valiosa para conocerte mejor. Estoy aquí contigo.");
+    parts.push("Recuerda que cada síntoma es información valiosa para conocerte mejor. Estoy aquí contigo. ¿Hay algo más en lo que pueda ayudarte hoy?");
     return parts.join(" ");
 }
 
@@ -1596,55 +1613,57 @@ function getLocalDoctorReply(message) {
     let context = getCycleContext();
     let predictiveTip = getPredictiveTipForVoice();
     if (/(cómo ha estado|como ha estado|mi ciclo este|este mes|mi mes|resumen|cómo va|como va)/i.test(normalizedMessage)) {
-        if (context.totalCycles === 0) return "Aún no tienes registros en tu calendario, Yosseling. Cuando anotes tu próximo periodo, podré darte un resumen personalizado de cómo va tu ciclo.";
-        let summary = `Según tus registros, llevas ${context.totalCycles} ciclo(s) con un promedio de ${context.averageCycleLength} días. Estás en fase ${context.currentPhase}`;
-        if (context.daysUntilNext !== null) summary += context.daysUntilNext > 0 ? ` y faltan ${context.daysUntilNext} días para tu próximo periodo.` : ` y tu periodo debería estar por llegar.`;
+        if (context.totalCycles === 0) return "Mira, Yosseling, aún no tienes registros en tu calendario. Pero no te preocupes, cuando anotes tu próximo periodo, podré darte un resumen personalizado de cómo va tu ciclo. ¿Te gustaría que empecemos hoy?";
+        let summary = `A ver, déjame revisar. Según tus registros, llevas ${context.totalCycles} ciclo(s), con un promedio de ${context.averageCycleLength} días. Ahora estás en fase ${context.currentPhase}`;
+        if (context.daysUntilNext !== null) summary += context.daysUntilNext > 0 ? `, y faltan ${context.daysUntilNext} días para tu próximo periodo.` : `, y tu periodo debería estar por llegar.`;
         else summary += ".";
-        if (context.irregularCycle) summary += ` He notado variaciones de ${context.cycleVariation} días entre ciclos; vale la pena vigilarlo.`;
-        if (context.recentLogs && context.recentLogs.length > 0) summary += ` Tus últimos registros: ${context.recentLogs.slice(-5).join("; ")}.`;
+        if (context.irregularCycle) summary += ` Te comento algo, he notado variaciones de ${context.cycleVariation} días entre ciclos, así que vale la pena vigilarlo.`;
         if (predictiveTip) summary += ` ${predictiveTip}`;
+        summary += " ¿Cómo te suena eso?";
         return summary;
     }
     if (/(dolor de cabeza|me dolía|me dolia|martes|jueves|ayer|antier)/i.test(normalizedMessage) && context.recentLogs.length > 0) {
         let matching = context.recentLogs.filter(log => /dolor|mareo|malestar|cansad|fatiga/i.test(log));
-        if (matching.length > 0) return `Según tus notas, registraste: ${matching.slice(-3).join("; ")}. Si el dolor de cabeza fue intenso o diferente a lo habitual, conviene hidratación, descanso y consultar si se repite con frecuencia.`;
+        if (matching.length > 0) return `Mira, según tus notas, registraste cosas como ${matching.slice(-3).join(", ")}. Si el dolor de cabeza fue intenso o diferente a lo habitual, conviene hidratarse bien, descansar y consultar si se repite con frecuencia. ¿Quieres que anotemos cómo te sientes hoy?`;
     }
     if (/(remedio|qué tomar|que tomar|aliviar|calmar|tratamiento)/i.test(normalizedMessage) && /(dolor|cólico|colico|periodo|regla)/i.test(normalizedMessage)) {
-        return "Para molestias leves puedes probar calor local, descanso, hidratación y movimiento suave. No tomes medicamentos nuevos sin confirmar que son seguros para ti; si el dolor es intenso, repentino o no mejora, busca atención médica.";
+        return "Claro, Yosseling. Para molestias leves, lo que podemos hacer es probar calor local, descanso, buena hidratación y movimiento suave. Eso suele ayudar bastante. Ahora, no tomes medicamentos nuevos sin confirmar que son seguros para ti. Y si el dolor es intenso o no mejora, busca atención médica. ¿Cómo te sientes con eso?";
     }
     if (/(dolor|cólico|colico|calambre)/i.test(normalizedMessage)) {
-        let base = "Siento que tengas dolor. Para molestias leves, prueba calor local, hidratación y descanso. Si el dolor es intenso, repentino, diferente a lo habitual o viene con fiebre o desmayo, busca atención médica.";
+        let base = "Comprendo perfectamente, Yosseling. Siento que tengas dolor. Mira, para molestias leves, prueba calor local, hidratarte y descansar un rato. Si el dolor es intenso, repentino, o viene con fiebre, busca atención médica sin dudarlo.";
         if (predictiveTip) base += ` ${predictiveTip}`;
+        base += " ¿Quieres que platiquemos sobre cómo aliviarlo?";
         return base;
     }
     if (/(mareo|desmayo|náusea|nausea|vómito|vomito)/i.test(normalizedMessage)) {
-        return "Gracias por contármelo. Siéntate o recuéstate, toma agua en pequeños sorbos y evita levantarte rápido. Si te desmayas o empeora, busca ayuda médica.";
+        return "Entiendo, no te preocupes, pero hay que tener cuidado. Siéntate o recuéstate, toma agua en pequeños sorbos y evita levantarte rápido. Si llegas a desmayarte o empeora, busca ayuda médica enseguida. ¿Cómo te vas sintiendo ahora?";
     }
     if (/(triste|ansiedad|ansiosa|preocup|llorar|ánimo|animo)/i.test(normalizedMessage)) {
-        return "Te escucho, Yosseling. No tienes que resolverlo todo ahora. Respira despacio, date un momento y recuerda que pedir apoyo también es cuidarte.";
+        return "Te escucho, Yosseling. Tranquila, es completamente normal sentirse así. No tienes que resolverlo todo ahora. Respira despacio, date un momento, y recuerda que pedir apoyo también es cuidarte. ¿Hay algo que te esté preocupando en particular?";
     }
     if (/(cansad|fatiga|agotad|sueño|sueno)/i.test(normalizedMessage)) {
-        let base = "Tu cuerpo merece una pausa. Toma agua, come algo suave si lo necesitas y busca un momento de descanso sin exigirte de más.";
+        let base = "Comprendo, Yosseling. Tu cuerpo merece una pausa. Toma agua, come algo suave si lo necesitas, y busca un momento de descanso sin exigirte de más.";
         if (predictiveTip) base += ` ${predictiveTip}`;
+        base += " ¿Te gustaría que anotemos esto en tu registro de hoy?";
         return base;
     }
     if (/(irregular|retraso|no me baja|se me adelantó|se me atraso|se me atrasó|período loco|periodo loco)/i.test(normalizedMessage)) {
-        let context = getCycleContext();
-        if (context.irregularCycle) {
-            return `Entiendo tu preocupación, Yosseling. Tus registros muestran variaciones de ${context.cycleVariation} días; conviene orientarnos por tu promedio de ${context.averageCycleLength} días y no asumir un ciclo fijo de 28. Anota síntomas, descanso y estrés, y consulta con tu ginecóloga si dura más de 3 meses o aparece dolor intenso, sangrado abundante o desmayo.`;
+        let ctx = getCycleContext();
+        if (ctx.irregularCycle) {
+            return `Entiendo tu preocupación, Yosseling. Mira, tus registros muestran variaciones de ${ctx.cycleVariation} días, así que conviene orientarnos por tu promedio de ${ctx.averageCycleLength} días y no asumir un ciclo fijo de 28. Anota tus síntomas y tu nivel de estrés, y consulta con tu ginecóloga si dura más de 3 meses, o aparece dolor intenso o sangrado abundante. ¿Te gustaría que te ayude a registrar algo?`;
         }
-        return "Entiendo tu preocupación, Yosseling. Un retraso puntual puede relacionarse con estrés o cambios en tu rutina. Registra tus fechas y síntomas; si la irregularidad persiste más de 3 meses, hay dolor intenso, sangrado abundante o posibilidad de embarazo, consulta con tu ginecóloga.";
+        return "Entiendo, Yosseling. Un retraso puntual puede relacionarse con estrés o cambios en tu rutina, no te preocupes demasiado. Registra tus fechas y síntomas, y si la irregularidad persiste más de 3 meses, o hay dolor intenso, consulta con tu ginecóloga. ¿Quieres que anotemos algo hoy?";
     }
     if (/(ciclo|periodo|regla|ovul|fértil|fertil)/i.test(normalizedMessage)) {
         let phase = getCycleContext();
         return phase.currentPhase === "desconocida"
-            ? "Puedo orientarte mejor si registras el inicio de tu último periodo. Así estimamos tu fase y la próxima fecha, aunque una predicción nunca sustituye una prueba o una consulta médica."
-            : `Según tus registros estás en la fase ${phase.currentPhase}. Tu ciclo es único; usa esta estimación como orientación y registra cualquier cambio importante.`;
+            ? "Mira, puedo orientarte mejor si registras el inicio de tu último periodo. Así estimamos tu fase y la próxima fecha. Aunque claro, una predicción nunca sustituye una prueba o una consulta médica. ¿Te gustaría registrar tu ciclo ahora?"
+            : `Según tus registros, estás en la fase ${phase.currentPhase}. Tu ciclo es único, así que usa esta estimación como orientación y registra cualquier cambio importante. ¿Hay algo específico que quieras saber?`;
     }
     if (/(embaraz|prueba|test)/i.test(normalizedMessage)) {
-        return "Si hay posibilidad de embarazo y tienes retraso, una prueba suele ser más fiable desde el primer día de falta. Si presentas dolor fuerte o sangrado abundante, busca atención médica urgente.";
+        return "Claro. Si hay posibilidad de embarazo y tienes retraso, una prueba suele ser más fiable desde el primer día de falta. Y si presentas dolor fuerte o sangrado abundante, busca atención médica urgente. ¿Hay algo más que te inquiete sobre esto?";
     }
-    return "Entiendo lo que me cuentas. Para orientarte mejor, dime qué síntoma tienes, desde cuándo empezó y si es diferente a lo habitual. Estoy aquí contigo.";
+    return "Entiendo lo que me cuentas, Yosseling. Para orientarte mejor, dime, qué síntoma tienes, desde cuándo empezó, y si es diferente a lo habitual. Estoy aquí contigo. ¿Cómo te sientes ahora mismo?";
 }
 
 async function askDoctor(transcript) {
@@ -1816,6 +1835,8 @@ function startListening() {
         stopListening();
         return;
     }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (voiceWave) voiceWave.classList.remove("speaking");
     stopRequested = false;
     playMicStartFeedback();
     createRecognitionSession(Recognition);
